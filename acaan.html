@@ -1,0 +1,2975 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="계산기">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>계산기</title>
+<style>
+  :root{
+    /* iOS 다크 + 리퀴드 글래스 기조 */
+    --felt: #0C0D10;
+    --felt-dark: #000000;
+    --gold: #6E7681;         /* 보조 텍스트 */
+    --gold-bright: #FFFFFF;  /* 강조 */
+    --cream: #F2F2F7;        /* iOS label */
+    --ink: #000000;
+    --ruby: #FF453A;         /* iOS systemRed */
+    --accent: #0A84FF;       /* iOS systemBlue */
+    --zone-easy: #30D158;
+    --zone-mid: #FFD60A;
+    --zone-hard: #FF453A;
+    /* 안전영역: 브라우저 탭으로 열면 주소창/툴바가 이미 그 자리를 차지하고 있어
+       env()를 그대로 더하면 주소창 높이만큼 화면이 통째로 떠 보인다.
+       홈 화면에서 실행(standalone)할 때만 실제 값을 넣는다. */
+    --sa-top: 0px;
+    --sa-bottom: 0px;
+    --muted-rgb: 255,255,255;   /* rgba(var(--muted-rgb),a) 로 쓰는 보조 텍스트 기준색 */
+    --on-accent: #000000;       /* --gold-bright 배경 위에 올리는 글자색 */
+    --glass: rgba(255,255,255,0.07);
+    --glass-hi: rgba(255,255,255,0.12);
+    --panel: rgba(255,255,255,0.06);
+    --panel-line: rgba(255,255,255,0.09);
+  }
+  @media (display-mode: standalone), (display-mode: fullscreen){
+    :root{ --sa-top: env(safe-area-inset-top); --sa-bottom: env(safe-area-inset-bottom); }
+  }
+  /* iOS는 예전부터 navigator.standalone 으로만 알 수 있어 JS가 이 클래스를 붙인다 */
+  html.is-standalone{ --sa-top: env(safe-area-inset-top); --sa-bottom: env(safe-area-inset-bottom); }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; height:100%; overscroll-behavior:none; }
+  body{
+    background:
+      radial-gradient(760px 420px at 12% 2%, rgba(10,132,255,0.16), transparent 62%),
+      radial-gradient(680px 400px at 92% 20%, rgba(191,90,242,0.11), transparent 60%),
+      linear-gradient(180deg, var(--felt) 0%, var(--felt-dark) 100%);
+    color: var(--cream);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+    height: 100vh;   /* 구형 브라우저 폴백 */
+    height: 100svh;  /* dvh 미지원 브라우저: 툴바가 떠 있는 상태 기준이라 최소한 잘리지는 않는다 */
+    height: 100dvh;  /* iOS 주소창 변화에도 정확히 화면에 맞춤 */
+    overflow: hidden;
+    /* 안전영역(노치·홈 인디케이터)은 여기서 한 번만 처리한다.
+       shell/dock에 또 넣으면 이중으로 밀려 하단이 크게 빈다. */
+    box-sizing: border-box;
+    padding-top: var(--sa-top);
+    padding-bottom: var(--sa-bottom);
+  }
+
+  .shell{ height:100%; display:flex; flex-direction:column; max-width:480px; margin:0 auto; }
+
+  /* ---- top bar ---- */
+  .topbar{
+    flex: 0 0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 14px 16px 10px;
+  }
+  .brand{ display:flex; flex-direction:column; }
+  .eyebrow{
+    font-size: 11px; letter-spacing: 0.01em;
+    color: rgba(var(--muted-rgb),0.35);
+  }
+  .brand h1{
+    font-weight:700; font-size:24px; margin:1px 0 0; letter-spacing:-0.03em;
+  }
+  .icon-btn{
+    width:44px; height:44px; border-radius:50%;
+    background: rgba(255,255,255,0.09); border:1px solid rgba(255,255,255,0.10);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    color: var(--cream); font-size:18px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .new-card-btn{
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:11px;
+    color: rgba(var(--muted-rgb),0.55);
+    background:none; border:none; text-decoration:underline; cursor:pointer;
+    padding:4px;
+  }
+
+  /* ---- stage (scrollable middle) ---- */
+  .stage{ flex:1 1 auto; min-height:0; overflow-y:auto; padding: 4px 16px 10px; }
+  .stage.is-result{ display:flex; flex-direction:column; justify-content:center; }
+
+  .placeholder{
+    height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; color: rgba(var(--muted-rgb),0.45); gap:10px;
+  }
+  .placeholder .big-q{ font-family:-apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; font-size:52px; color: rgba(var(--muted-rgb),0.18); }
+  .placeholder .deck-name{
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:11px; color: var(--gold);
+  }
+
+  .panel{
+    background: var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .panel h2{
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; letter-spacing:0.12em;
+    text-transform:uppercase; color: var(--gold); margin:0 0 6px;
+  }
+
+  .result-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .picked-card{ font-family:-apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; font-size:30px; font-weight:600; }
+  .picked-card.red{ color: var(--ruby); }
+  .picked-card.black{ color: var(--cream); }
+  .deck-tag{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; color: rgba(var(--muted-rgb),0.5); text-align:right; }
+
+  .gauge{
+    position:relative; height:22px; border-radius:6px; margin: 4px 0 2px;
+    background: linear-gradient(90deg,
+      var(--zone-easy) 0%, var(--zone-easy) 19.2%,
+      var(--zone-mid) 19.2%, var(--zone-mid) 50%,
+      var(--zone-hard) 50%, var(--zone-hard) 100%);
+    opacity:0.28;
+  }
+  .gauge-marker{
+    position:absolute; top:-4px; width:3px; height:30px; background:var(--cream);
+    box-shadow:0 0 8px rgba(var(--muted-rgb),0.7); transform:translateX(-1.5px);
+  }
+  .gauge-labels{ display:flex; justify-content:space-between; font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:9px; color: rgba(var(--muted-rgb),0.4); margin-bottom:10px; }
+
+  .number-row{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
+  .number-row .big{ font-family:-apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; font-size:34px; font-weight:700; line-height:1; }
+  .tag{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; letter-spacing:0.05em; padding:3px 8px; border-radius:999px; font-weight:600; white-space:nowrap; }
+  .tag.easy{ background: rgba(127,174,131,0.22); color: var(--zone-easy); }
+  .tag.mid{ background: rgba(217,164,65,0.22); color: var(--zone-mid); }
+  .tag.hard{ background: rgba(178,58,72,0.22); color: var(--zone-hard); }
+  .hint{ font-size:12px; color: rgba(var(--muted-rgb),0.6); line-height:1.4; }
+
+  .spectator-line{
+    display:flex; align-items:center; justify-content:space-between;
+    padding-top:10px; margin-top:10px; border-top:1px solid var(--panel-line);
+  }
+  .spectator-line .label{ font-size:12px; color: rgba(var(--muted-rgb),0.55); }
+  .spectator-line .value{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:22px; font-weight:700; color: var(--gold-bright); }
+  .spectator-line .value.empty{ color: rgba(var(--muted-rgb),0.25); font-size:16px; font-weight:500; }
+
+  .outs-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 12px; border-radius:10px; background: rgba(0,0,0,0.16);
+    border:1px solid var(--panel-line); margin-bottom:7px; font-size:12.5px;
+  }
+  .outs-item.best{ border-color: var(--gold); background: rgba(228,200,120,0.10); }
+  .outs-item .desc{ color: rgba(var(--muted-rgb),0.85); line-height:1.4; }
+  .outs-item .desc .method{ font-weight:600; color: var(--cream); display:block; }
+  .outs-item .cutinfo{ text-align:right; }
+  .outs-item .cutinfo .amt{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-weight:700; font-size:14px; }
+  .best-badge{
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:9px; color: var(--gold);
+    letter-spacing:0.08em; margin-bottom:6px;
+  }
+
+  /* ---- bottom dock (keyboard area) ---- */
+  .dock{
+    flex:0 0 auto;
+    padding: 12px 14px 12px;
+    border-top:1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+  }
+  .dock-label{
+    font-size:12px; letter-spacing:-0.01em;
+    color: rgba(var(--muted-rgb),0.4); margin-bottom:6px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .dock-label button{
+    padding:15px 6px; margin:-15px 0;
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; color: var(--gold);
+    background:none; border:none; text-decoration:underline; cursor:pointer;
+  }
+
+  .rank-grid{ display:grid; grid-template-columns: repeat(6, 1fr); gap:6px; margin-bottom:8px; }
+  .rank-btn{
+    padding:13px 0; border-radius:14px; border:1px solid rgba(255,255,255,0.10);
+    background:rgba(255,255,255,0.07); color:var(--cream);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    font-size:17px; font-weight:500; letter-spacing:-0.01em;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .rank-btn:active{ transform:scale(0.96); }
+  .rank-btn.active{ background:#fff; color:#000; border-color:#fff; font-weight:600; }
+
+  .suit-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:8px; }
+  .suit-btn{
+    padding:14px 0; border-radius:14px; border:1px solid rgba(255,255,255,0.10);
+    background:rgba(255,255,255,0.07); cursor:pointer;
+    /* ♣♠ 글리프는 폰트에 통통하게 그려져 있어 굵기로는 안 얇아진다.
+       크기와 색 농도로 시각적 무게를 낮춘다. */
+    font-size:26px; font-weight:300; line-height:1;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    display:flex; align-items:center; justify-content:center;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .suit-btn:active{ transform:scale(0.96); }
+  /* 랭크를 아직 안 골랐으면 수트 버튼만 눌러 에이스가 들어간다는 힌트 */
+  .suit-a{
+    font-size:13px; font-weight:600; letter-spacing:-0.02em;
+    opacity:0.4; margin-right:4px; align-self:center;
+  }
+  .suit-btn.red{ color: rgba(255,69,58,0.86); }
+  .suit-btn.black{ color: rgba(var(--muted-rgb),0.80); }
+  .suit-btn.active{ background:#fff; border-color:#fff; }
+  .suit-btn.active.red{ color: var(--ruby); }
+  .suit-btn.active.black{ color: #000; }
+
+  .keypad-display{
+    text-align:center; font-family:-apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; font-weight:700; font-size:30px;
+    padding: 4px 0 10px; letter-spacing:0.05em; min-height:38px;
+    color: var(--gold-bright);
+  }
+  .keypad-display.placeholder-txt{ color: rgba(var(--muted-rgb),0.25); font-size:16px; font-weight:500; font-family:inherit; }
+  .keypad-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:6px; }
+  .key-btn{
+    padding:15px 0; border-radius:14px; border:1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.07); color:var(--cream);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-weight:600; font-size:17px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .key-btn:active{ background: rgba(228,200,120,0.16); }
+  .key-btn.wide{ font-size:12px; letter-spacing:0.04em; }
+  .key-btn.confirm{ background: var(--accent); color:#fff; border-color: var(--accent); font-size:14px; font-weight:600; }
+
+  /* ---- skins (다른 앱으로 위장) ---- */
+  body[data-skin="ios-calc"]{ --felt:#0A0A0A; --felt-dark:#000000; --gold:#FF9F0A; --gold-bright:#FFB340; --ruby:#FF453A; }
+  body[data-skin="ios-notes"]{ --felt:#000000; --felt-dark:#000000; --gold:#FFD60A; --gold-bright:#FFE066; --ruby:#FF6961; --cream:#FFFFFF; --muted-rgb:255,255,255; }
+  body[data-skin="android-calc"]{ --felt:#202124; --felt-dark:#151619; --gold:#8AB4F8; --gold-bright:#AECBFA; --ruby:#F28B82; }
+
+  body[data-skin]:not([data-skin="felt"]) .eyebrow{ display:none; }
+  body[data-skin="ios-notes"] .brand{ display:none; }
+  body[data-skin="ios-notes"] .topbar{ padding:12px 16px 10px; }
+  body[data-skin="ios-notes"] .topbar > div{ gap:12px !important; }
+
+  /* ===== 계산기 스킨 (iOS / Android 공통 골격) ===== */
+  body[data-skin="ios-calc"], body[data-skin="android-calc"]{
+    --calc-digit-bg: #333333;
+    --calc-digit-text: #FFFFFF;
+    --calc-func-bg: #5A5A5E;
+    --calc-func-text: #FFFFFF;
+  }
+  body[data-skin="android-calc"]{ --calc-digit-bg:#303134; --calc-func-bg:#5F6368; --calc-func-text:#FFFFFF; }
+
+  body[data-skin="ios-calc"] *, body[data-skin="android-calc"] *{
+    font-family: -apple-system, BlinkMacSystemFont, Roboto, 'Noto Sans KR', system-ui, sans-serif !important;
+  }
+  body[data-skin="android-calc"] *{ font-family:Roboto, 'Noto Sans KR', system-ui, sans-serif !important; }
+
+  /* 타이틀은 계산기 앱엔 없으니 최소화 */
+  body[data-skin="ios-calc"] h1, body[data-skin="android-calc"] h1{
+    font-size:15px; font-weight:500; opacity:0.5;
+  }
+  body[data-skin="ios-calc"] .icon-btn, body[data-skin="android-calc"] .icon-btn{
+    border-radius:50%; background:var(--calc-digit-bg); border:none;
+  }
+
+  /* 카드/숫자 결과를 계산기 디스플레이 줄처럼 */
+  body[data-skin="ios-calc"] .picked-card, body[data-skin="android-calc"] .picked-card{
+    font-weight:300; letter-spacing:-0.01em;
+  }
+  body[data-skin="ios-calc"] .number-row .big, body[data-skin="android-calc"] .number-row .big{
+    font-weight:200; font-size:56px;
+  }
+  body[data-skin="ios-calc"] .panel, body[data-skin="android-calc"] .panel{
+    background:transparent; border:none; padding-left:4px; padding-right:4px;
+  }
+  body[data-skin="ios-calc"] .panel h2, body[data-skin="android-calc"] .panel h2{
+    font-weight:400; letter-spacing:0; opacity:0.4; text-transform:none;
+  }
+
+  /* 독(하단 입력부) 배경을 순수 블랙/다크로, 경계선 제거 */
+  body[data-skin="ios-calc"] .dock, body[data-skin="android-calc"] .dock{
+    background:transparent; border-top:none;
+  }
+  body[data-skin="ios-calc"] .dock-label, body[data-skin="android-calc"] .dock-label{
+    opacity:0.5; text-transform:none; letter-spacing:0;
+  }
+
+  /* 디스플레이 줄: 계산기처럼 우측 정렬 + 얇은 대형 폰트 */
+  body[data-skin="ios-calc"] .keypad-display, body[data-skin="android-calc"] .keypad-display{
+    color:#FFFFFF;
+    text-align:right; font-weight:200; font-size:52px; padding:20px 10px 24px;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+  }
+  body[data-skin="android-calc"] .keypad-display{ font-family:Roboto, 'Noto Sans KR', system-ui, sans-serif !important; }
+
+  /* 버튼: 완전한 원형, 숫자/기능 버튼 구분 색 */
+  body[data-skin="ios-calc"] .rank-btn, body[data-skin="android-calc"] .rank-btn,
+  body[data-skin="ios-calc"] .key-btn, body[data-skin="android-calc"] .key-btn{
+    aspect-ratio:1; border-radius:50%; border:none;
+    background: var(--calc-digit-bg); color: var(--calc-digit-text);
+    font-size:24px; font-weight:400;
+  }
+  body[data-skin="ios-calc"] .rank-grid, body[data-skin="android-calc"] .rank-grid,
+  body[data-skin="ios-calc"] .keypad-grid, body[data-skin="android-calc"] .keypad-grid{
+    gap:10px; padding:0 2px;
+  }
+  body[data-skin="ios-calc"] .rank-btn.active, body[data-skin="android-calc"] .rank-btn.active{
+    background: var(--gold); color:#fff;
+  }
+
+  /* 수트 버튼 = 오퍼레이터 버튼처럼 (원형, 포인트 컬러) */
+  body[data-skin="ios-calc"] .suit-btn, body[data-skin="android-calc"] .suit-btn{
+    aspect-ratio:1; border-radius:50%; border:none;
+    background: var(--gold); font-size:24px;
+  }
+  body[data-skin="ios-calc"] .suit-btn.red, body[data-skin="android-calc"] .suit-btn.red,
+  body[data-skin="ios-calc"] .suit-btn.black, body[data-skin="android-calc"] .suit-btn.black{
+    color:#fff;
+  }
+  body[data-skin="ios-calc"] .suit-btn.active, body[data-skin="android-calc"] .suit-btn.active{
+    background: var(--gold-bright);
+  }
+
+  /* 지우기 = AC처럼 밝은 회색, 확인 = 오퍼레이터 색 유지 */
+  body[data-skin="ios-calc"] .key-btn.wide:not(.confirm), body[data-skin="android-calc"] .key-btn.wide:not(.confirm){
+    background: var(--calc-func-bg); color: var(--calc-func-text);
+    aspect-ratio:auto; border-radius:40px; font-size:15px;
+  }
+  body[data-skin="ios-calc"] .key-btn.confirm, body[data-skin="android-calc"] .key-btn.confirm{
+    aspect-ratio:auto; border-radius:40px; font-size:15px; background:var(--gold); color:#fff;
+  }
+
+  body[data-skin="ios-calc"] .rank-grid, body[data-skin="android-calc"] .rank-grid{
+    grid-template-columns: repeat(4,1fr);
+  }
+
+  /* 실제 계산기 앱과 동일한 5행 x 4열 배열 (숫자 입력용) */
+  .calc-toprow{
+    display:flex; justify-content:space-between; align-items:center; padding:2px 4px 14px;
+  }
+  .calc-suit-hint{
+    display:flex; gap:13px; font-size:12px;
+    color: rgba(var(--muted-rgb),0.28);
+    font-family:-apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  .calc-suit-hint b{ font-weight:400; margin-left:2px; color: rgba(var(--muted-rgb),0.5); }
+  .calc-suit-hint b.red{ color:rgba(255,120,110,0.6); }
+  .calc-icon-btn{
+    width:38px; height:38px; border-radius:50%; border:none;
+    background: rgba(255,255,255,0.08); color: rgba(var(--muted-rgb),0.85);
+    font-size:16px; display:flex; align-items:center; justify-content:center;
+  }
+  .calc-grid{
+    display:grid; grid-template-columns: repeat(4,1fr); gap:10px; margin-top:4px;
+  }
+  .calc-btn{
+    aspect-ratio:1; border-radius:50%; border:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  }
+  .calc-btn .calc-main{ font-size:36px; font-weight:400; line-height:1; }
+  .calc-btn .pm-icon{ width:33px; height:33px; display:block; }
+  .calc-btn .calc-sub{ font-size:8px; font-weight:600; opacity:0.55; line-height:1; letter-spacing:0.02em; }
+  .calc-btn.digit{ background:var(--calc-digit-bg); color:var(--calc-digit-text); }
+  .calc-btn.func{ background:var(--calc-func-bg); color:var(--calc-func-text); }
+  .calc-btn.op, .calc-btn.equals{ background:var(--gold); color:#fff; }
+  .calc-btn.op .calc-main, .calc-btn.equals .calc-main{ font-size:38px; }
+  .calc-btn:active{ filter:brightness(1.3); }
+
+  body[data-skin="ios-calc"] .tag, body[data-skin="android-calc"] .tag{
+    border-radius:6px; font-weight:500;
+  }
+
+  body[data-skin="ios-notes"]{
+    background: #000000 !important;
+  }
+  body[data-skin="ios-notes"] .notes-format-row{
+    background:#181818; border-radius:30px; border-bottom:none;
+    height:60px; padding:0 0 0 9px; margin:0 -3px 2px;
+    align-items:center; justify-content:flex-start; gap:31px;
+    overflow:hidden;  /* 실제처럼 마지막 아이콘이 오른쪽 끝에서 잘림 */
+  }
+  body[data-skin="ios-notes"] .notes-format-item{ flex:0 0 auto; }
+  body[data-skin="ios-notes"]{ --nf-bg:#181818; }
+  body[data-skin="ios-notes"] .notes-format-item svg{ width:24px; height:24px; }
+  body[data-skin="ios-notes"] .nf-clip svg{ width:23px; height:23px; }
+  body[data-skin="ios-notes"] .nf-ai svg{ width:24px; height:24px; }
+  .nf-text{ font-weight:600; font-size:15px; letter-spacing:-0.01em; }
+  .nf-cut{ overflow:hidden; width:9px; }
+  body[data-skin="ios-notes"] .notes-format-item{ font-size:20px; }
+  body[data-skin="ios-notes"] .dock{
+    background:transparent; border-top:none;
+    padding: 10px 16px 10px;
+  }
+  body[data-skin="ios-notes"] .notes-format-item{ color:#fff; }
+
+  /* 키보드가 내려간 상태(결과 화면)의 하단 툴바 */
+  .notes-rest-row{ display:flex; align-items:center; gap:10px; }
+  .notes-rest-pill{
+    flex:1; display:flex; align-items:center; justify-content:space-around;
+    background:rgba(255,255,255,0.08); border-radius:26px; padding:14px 20px;
+    color:#fff;
+  }
+  .notes-compose{
+    width:52px; height:52px; border-radius:50%;
+    background:rgba(255,255,255,0.08); color:#fff;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+
+  /* 계산기 스킨: 실제 앱엔 없는 요소는 전부 숨김 (답은 디스플레이에 표시됨) */
+  body[data-skin="ios-calc"]{ background:#000000 !important; }
+  body[data-skin="android-calc"]{ background:#000000 !important; }
+
+  /* ===== 삼성(One UI) 계산기 스킨 ===== */
+  body[data-skin="android-calc"] .calc-btn{ background:transparent; }
+  body[data-skin="android-calc"] .calc-btn.digit{ background:transparent; color:#FFFFFF; }
+  body[data-skin="android-calc"] .calc-btn.func{ background:transparent; color:#8A8A8E; }
+  body[data-skin="android-calc"] .calc-btn.clear{ background:transparent; color:#FF6B6B; }
+  body[data-skin="android-calc"] .calc-btn.op{ background:transparent; color:#4A9DF8; }
+  body[data-skin="android-calc"] .calc-btn.equals{ background:#4A9DF8; color:#FFFFFF; }
+  body[data-skin="android-calc"] .calc-btn .calc-main{ font-weight:400; }
+  body[data-skin="android-calc"] .calc-btn:active{ background:rgba(255,255,255,0.10); }
+  body[data-skin="android-calc"] .calc-btn.equals:active{ background:#3B87DE; }
+  body[data-skin="android-calc"] .calc-grid{ gap:6px; }
+
+  .sam-backspace-row{ display:flex; justify-content:flex-end; padding:0 6px 6px; }
+  .sam-backspace{
+    background:transparent; border:none; color:#8A8A8E; cursor:pointer;
+    width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+    border-radius:50%;
+  }
+  .sam-backspace:active{ background:rgba(255,255,255,0.10); }
+
+  /* ===== 라이트모드: 위장 스킨은 실제 앱처럼 밝게 =====
+     html[data-theme="light"] 일 때 적용. 시스템 설정을 따를 땐 JS가 이 속성을 세팅한다. ===== */
+  /* ===== 라이트 테마 (수동 선택 또는 시스템 설정 반영) ===== */
+  html[data-theme="light"] body[data-skin="ios-calc"]{
+      background:#FFFFFF !important;
+      --cream:#000000; --muted-rgb:0,0,0;
+      --calc-digit-bg:#D5D5D5; --calc-digit-text:#000000;
+      --calc-func-bg:#A5A5A5; --calc-func-text:#000000;
+    }
+  html[data-theme="light"] body[data-skin="ios-calc"] .keypad-display{ color:#000 !important; }
+  html[data-theme="light"] body[data-skin="ios-calc"] .calc-answer-sub{ color:rgba(0,0,0,0.45); }
+  html[data-theme="light"] body[data-skin="ios-calc"] .calc-icon-btn{ background:rgba(0,0,0,0.06); color:#000; }
+  html[data-theme="light"] body[data-skin="ios-calc"] .calc-suit-hint{ color:rgba(0,0,0,0.32); }
+  html[data-theme="light"] body[data-skin="ios-calc"] .calc-suit-hint b{ color:rgba(0,0,0,0.55); }
+  html[data-theme="light"] body[data-skin="ios-calc"] .calc-suit-hint b.red{ color:rgba(200,40,30,0.7); }
+  html[data-theme="light"] body[data-skin="android-calc"]{
+      background:#FFFFFF !important;
+      --cream:#202124; --muted-rgb:32,33,36;
+      --gold:#1A73E8; --gold-bright:#1A73E8;
+    }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-btn.digit{ color:#000000; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-btn.func{ color:#6B6B70; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-btn.clear{ color:#E5484D; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-btn.op{ color:#1A73E8; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-btn.equals{ background:#1A73E8; color:#FFFFFF; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-btn:active{ background:rgba(0,0,0,0.07); }
+  html[data-theme="light"] body[data-skin="android-calc"] .sam-backspace{ color:#6B6B70; }
+  html[data-theme="light"] body[data-skin="android-calc"] .keypad-display{ color:#202124 !important; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-answer-sub{ color:rgba(32,33,36,0.5); }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-icon-btn{ background:rgba(0,0,0,0.06); color:#202124; }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-suit-hint{ color:rgba(32,33,36,0.35); }
+  html[data-theme="light"] body[data-skin="android-calc"] .calc-suit-hint b{ color:rgba(32,33,36,0.6); }
+  html[data-theme="light"] body[data-skin="ios-notes"]{
+      background:#FFFFFF !important;
+      --felt:#FFFFFF; --felt-dark:#FFFFFF;
+      --cream:#000000; --muted-rgb:0,0,0;
+    }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-format-row{ background:#EFEFF0; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-faint{ color: rgba(0,0,0,0.52); }
+  html[data-theme="light"] body[data-skin="ios-notes"]{ --nf-bg:#EFEFF0; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-format-item{ color:#000; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-back-chevron, html[data-theme="light"] body[data-skin="ios-notes"] .notes-undo-icon{ background:rgba(0,0,0,0.06); color:#000; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-share-pill{ background:rgba(0,0,0,0.06); }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-share-icon{ color:#000; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .icon-btn::before{ color:#000; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-body-input{ caret-color:#E8B900; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-rest-pill{ background:#EFEFF0; color:#000; }
+  html[data-theme="light"] body[data-skin="ios-notes"] .notes-compose{ background:#EFEFF0; color:#000; }
+  /* 기본(매직) 스킨 라이트 테마 */
+  html[data-theme="light"] body[data-skin="felt"]{
+    --felt:#F4F4F7; --felt-dark:#E9E9EE;
+    --cream:#111114; --muted-rgb:0,0,0;
+    --gold:#6B7280; --gold-bright:#111114;
+    --glass:rgba(0,0,0,0.05); --glass-hi:rgba(0,0,0,0.09);
+    --panel:rgba(0,0,0,0.035); --panel-line:rgba(0,0,0,0.10);
+    --on-accent:#FFFFFF; --ink:#FFFFFF;
+    --ruby:#D70015; --accent:#0071E3;
+  }
+  html[data-theme="light"] body[data-skin="felt"] .mv-item.strong .mv-tag{
+    background:#1B7F3B; color:#FFFFFF;
+  }
+  html[data-theme="light"] body[data-skin="felt"] .instant-tag,
+  html[data-theme="light"] body[data-skin="felt"] .custom-status.ok{ color:#1B7F3B; }
+  html[data-theme="light"] body[data-skin="felt"] .instant{
+    background:rgba(27,127,59,0.10); border-color:rgba(27,127,59,0.30);
+  }
+  html[data-theme="light"] body[data-skin="felt"] .tag.easy{ color:#1B7F3B; }
+  html[data-theme="light"] body[data-skin="felt"] .tag.mid{ color:#8A6A00; }
+  html[data-theme="light"] body[data-skin="felt"] .tag.hard{ color:#C0111C; }
+  html[data-theme="light"] body[data-skin="felt"] .hero-warn,
+  html[data-theme="light"] body[data-skin="felt"] .alt-item.heavy .alt-cut::after{ color:#C0111C; }
+  html[data-theme="light"] body[data-skin="felt"] .mv-title,
+  html[data-theme="light"] body[data-skin="felt"] .guide-n,
+  html[data-theme="light"] body[data-skin="felt"] .dbl-n{ color:#111114; }
+  html[data-theme="light"] body[data-skin="felt"] .icon-btn,
+  html[data-theme="light"] body[data-skin="felt"] .rank-btn,
+  html[data-theme="light"] body[data-skin="felt"] .suit-btn,
+  html[data-theme="light"] body[data-skin="felt"] .key-btn{
+    background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.10); color:var(--cream);
+  }
+  html[data-theme="light"] body[data-skin="felt"] .suit-btn.red{ color:#D70015; }
+  html[data-theme="light"] body[data-skin="felt"] .rank-btn.active,
+  html[data-theme="light"] body[data-skin="felt"] .suit-btn.active{
+    background:#111114; border-color:#111114; color:#fff;
+  }
+  html[data-theme="light"] body[data-skin="felt"] .suit-btn.active.red{ color:#FF6B60; }
+  html[data-theme="light"] body[data-skin="felt"] .suit-btn.active.black{ color:#fff; }
+  html[data-theme="light"] body[data-skin="felt"] .dock{
+    background:rgba(255,255,255,0.55); border-top-color:rgba(0,0,0,0.08);
+  }
+  html[data-theme="light"] body[data-skin="felt"] .dock-label{ color:rgba(0,0,0,0.45); }
+  html[data-theme="light"] body[data-skin="felt"] .eyebrow{ color:rgba(0,0,0,0.4); }
+  html[data-theme="light"] body[data-skin="felt"] .hero{
+    background:linear-gradient(160deg, rgba(255,255,255,0.95), rgba(255,255,255,0.7));
+    border-color:rgba(0,0,0,0.10);
+    box-shadow:0 10px 30px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+  html[data-theme="light"] body[data-skin="felt"] .hero-cut{ color:#111114; }
+  html[data-theme="light"] body[data-skin="felt"] .hero-method,
+  html[data-theme="light"] body[data-skin="felt"] .hero-shortcut,
+  html[data-theme="light"] body[data-skin="felt"] .res-meta,
+  html[data-theme="light"] body[data-skin="felt"] .alt-method,
+  html[data-theme="light"] body[data-skin="felt"] .alts summary,
+  html[data-theme="light"] body[data-skin="felt"] .second-method,
+  html[data-theme="light"] body[data-skin="felt"] .second-tag{ color:rgba(0,0,0,0.5); }
+  html[data-theme="light"] body[data-skin="felt"] .second-cut{ color:#111114; }
+  html[data-theme="light"] body[data-skin="felt"] .second{ background:rgba(0,0,0,0.04); }
+  html[data-theme="light"] body[data-skin="felt"] .undo-reset{ background:rgba(0,0,0,0.10); }
+
+  body[data-skin="ios-calc"] .topbar, body[data-skin="android-calc"] .topbar,
+  body[data-skin="ios-calc"] .stage,  body[data-skin="android-calc"] .stage,
+  body[data-skin="ios-calc"] .dock-label, body[data-skin="android-calc"] .dock-label{
+    display:none !important;
+  }
+  body[data-skin="ios-calc"] .dock, body[data-skin="android-calc"] .dock{
+    flex:1 1 auto; display:flex; flex-direction:column; justify-content:flex-end;
+  }
+  body[data-skin="ios-calc"] .calc-icon-btn, body[data-skin="android-calc"] .calc-icon-btn{
+    cursor:pointer;
+  }
+
+  /* ===== 메모(Notes) 스킨 ===== */
+  body[data-skin="ios-notes"] *{
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+  }
+  body[data-skin="ios-notes"] h1{ font-size:17px; font-weight:700; opacity:0.9; }
+  body[data-skin="ios-notes"] .big-q{ display:none; }
+  body[data-skin="ios-notes"] .deck-name{ color: rgba(243,233,211,0.4); font-family:inherit !important; font-size:13px; }
+  body[data-skin="ios-notes"] .placeholder{ align-items:flex-start; text-align:left; padding-top:10px; }
+  body[data-skin="ios-notes"] .placeholder > div:nth-child(2){ font-size:16px; line-height:1.6; color: rgba(243,233,211,0.75); }
+
+  /* 카드/결과 패널을 그냥 노트 문단처럼 */
+  body[data-skin="ios-notes"] .panel{
+    background:transparent; border:none; padding:6px 2px;
+  }
+  body[data-skin="ios-notes"] .panel h2{
+    display:none;
+  }
+  body[data-skin="ios-notes"] .picked-card{
+    font-family: -apple-system, sans-serif !important; font-weight:700; font-size:20px;
+  }
+  body[data-skin="ios-notes"] .picked-card.red, body[data-skin="ios-notes"] .cardv.red{
+    color: inherit !important;
+  }
+  body[data-skin="ios-notes"] .deck-tag{ font-family:inherit !important; font-size:13px; opacity:0.5; }
+  body[data-skin="ios-notes"] .gauge, body[data-skin="ios-notes"] .gauge-labels{ display:none; }
+  body[data-skin="ios-notes"] .number-row .big{ font-size:22px; font-weight:700; }
+  body[data-skin="ios-notes"] .tag{
+    background:transparent !important; padding:0; font-family:inherit !important;
+    font-size:14px; opacity:0.55; border-radius:0;
+  }
+  body[data-skin="ios-notes"] .hint{ font-size:14px; line-height:1.7; opacity:0.6; }
+  body[data-skin="ios-notes"] .outs-item{
+    background:transparent; border:none; border-bottom:1px solid rgba(243,233,211,0.08);
+    border-radius:0; padding:12px 0; font-size:15px;
+  }
+  body[data-skin="ios-notes"] .outs-item.best{ background:transparent; }
+  body[data-skin="ios-notes"] .best-badge{ opacity:0.5; }
+  body[data-skin="ios-notes"] .spectator-line{ border-top:1px solid rgba(243,233,211,0.08); }
+  body[data-skin="ios-notes"] .icon-btn{ border-radius:8px; background:transparent; border:none; font-size:20px; }
+
+  /* 노트 스킨: 결과 텍스트용(레거시, 재사용 안 함) */
+  .notes-inputline{ padding:6px 2px 4px; }
+  .notes-text-input{
+    width:100%; border:none; background:transparent; outline:none;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size:17px; color: var(--cream); padding:8px 2px;
+    border-bottom:1px solid rgba(243,233,211,0.15);
+  }
+  .notes-text-input::placeholder{ color: rgba(243,233,211,0.3); }
+  .notes-text-input.shake{ animation: shakeX 0.3s; border-bottom-color: var(--ruby); }
+
+  /* 노트 본문(stage)에 바로 심는 실제 입력창 - 타이핑한 것처럼 보이게, 테두리/배경 없음 */
+  .notes-body-input{
+    width:100%; border:none; background:transparent; outline:none;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+    font-size:17px; line-height:1.27; color: var(--cream);
+    padding:0; margin:0; caret-color: var(--gold);
+  }
+  .notes-line{
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size:17px; line-height:1.27; color: var(--cream);
+  }
+  .notes-body-input::placeholder{ color: rgba(var(--muted-rgb),0.28); }
+  .notes-faint{ color: rgba(var(--muted-rgb),0.46); }
+  .notes-body-input.shake{ animation: shakeX 0.3s; color: var(--ruby) !important; }
+  .keypad-display.shake{ animation: shakeX 0.3s; color: var(--ruby) !important; }
+  .calc-answer-sub{
+    text-align:right; font-size:14px; color: rgba(var(--muted-rgb),0.45);
+    padding:0 10px 4px; letter-spacing:0.01em; font-weight:300;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  .calc-hint{
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace !important; font-size:10px;
+    color: rgba(243,233,211,0.4); letter-spacing:0.02em;
+  }
+  @keyframes shakeX{
+    0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-4px); } 75%{ transform:translateX(4px); }
+  }
+  .notes-actions{
+    display:flex; justify-content:space-between; align-items:center; padding:10px 2px 0;
+  }
+  .notes-link{
+    font-family: -apple-system, sans-serif; font-size:14px; color: rgba(243,233,211,0.5); cursor:pointer;
+  }
+  .notes-link-primary{ color: var(--gold); font-weight:600; }
+  body[data-skin="ios-notes"] .dock-label button{
+    font-family: -apple-system, sans-serif !important; color: rgba(243,233,211,0.5);
+  }
+
+  /* 노트 앱 서식 툴바(장식용) */
+  .notes-format-row{
+    display:flex; align-items:center; justify-content:space-between; padding:8px 6px 14px;
+    border-bottom:1px solid rgba(243,233,211,0.08); margin-bottom:2px;
+  }
+  .notes-format-item{
+    font-size:17px; color: rgba(243,233,211,0.7);
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* 계산 결과를 실제 타이핑한 메모 텍스트처럼 표시 */
+  .notes-plain{
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size:17px; line-height:1.27; color: var(--cream);
+    padding:2px 2px;
+  }
+
+  /* 노트 앱 위장: 뒤로가기 셰브런 + (공유 아이콘 + ··· 알약) + 노란 완료 체크 */
+  .notes-back-chevron{ display:none; }
+  body[data-skin="ios-notes"] .notes-back-chevron{
+    display:flex; align-items:center; justify-content:center;
+    width:43px; height:43px; border-radius:50%; background: rgba(255,255,255,0.08);
+    color: var(--cream); font-size:26px; font-weight:500;
+  }
+  .notes-undo-icon{ display:none; }
+  body[data-skin="ios-notes"] .notes-undo-icon{
+    display:none; align-items:center; justify-content:center;
+    width:43px; height:43px; border-radius:50%; background: rgba(255,255,255,0.08);
+    color: var(--cream);
+  }
+  body[data-skin="ios-notes"] .notes-undo-icon svg{ width:22px; height:22px; }
+  body[data-skin="ios-notes"].can-undo .notes-undo-icon{ display:flex; }
+
+  /* 새 노트 편집 시 상단 중앙 날짜 */
+  .notes-date{
+    display:none; text-align:center; font-size:15px;
+    color:rgba(var(--muted-rgb),0.45); padding:2px 0 12px;
+    font-family:-apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  body[data-skin="ios-notes"] .notes-date{ display:block; }
+
+  .notes-share-pill{ display:contents; order:2; }
+  .new-card-btn{ order:1; }
+  .notes-share-icon{ display:none; }
+  body[data-skin="ios-notes"] .notes-share-pill{
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    background: rgba(255,255,255,0.08); border-radius:22px;
+    width:100px; height:43px; padding:0 19px;
+    order:1;
+  }
+  body[data-skin="ios-notes"] .notes-share-icon{ width:20px; height:20px; }
+  .notes-share-tap{ display:inline-flex; align-items:center; }
+  body[data-skin="ios-notes"] .notes-share-tap{ cursor:pointer; }
+  body[data-skin="ios-notes"] .notes-share-icon{ display:block; color: var(--cream); width:23px; height:23px; }
+  body[data-skin="ios-notes"] .icon-btn{
+    background:transparent; border:none; width:auto; height:auto;
+    font-size:0; position:relative; padding:0;
+  }
+  body[data-skin="ios-notes"] .icon-btn svg{ display:none; }
+  body[data-skin="ios-notes"] .icon-btn::before{
+    content:''; width:19.2px; height:4px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 19.2 4'><circle cx='2' cy='2' r='2' fill='%23ffffff'/><circle cx='9.6' cy='2' r='2' fill='%23ffffff'/><circle cx='17.2' cy='2' r='2' fill='%23ffffff'/></svg>");
+    background-size:contain; background-repeat:no-repeat; background-position:center;
+  }
+  body[data-skin="ios-notes"] .new-card-btn{
+    width:43px; height:43px; border-radius:50%; background:#D9B23D;
+    font-size:0; position:relative; padding:0;
+    display:flex; align-items:center; justify-content:center;
+    order:2; border:none;
+    text-decoration:none;   /* 기본 스타일의 밑줄이 체크 아래 그어지던 문제 */
+  }
+  body[data-skin="ios-notes"] .new-card-btn::before{
+    content:''; width:22px; height:22px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12.5l5.5 5.5L20 6.5'/></svg>");
+    background-size:contain; background-repeat:no-repeat; background-position:center;
+  }
+  body[data-skin="ios-notes"] .new-card-btn.is-hidden,
+  .new-card-btn.is-hidden{ display:none !important; }
+
+  .modal-overlay{
+    position:fixed; inset:0; background: rgba(0,0,0,0.55);
+    display:none; align-items:flex-end; justify-content:center; z-index:50;
+    /* 시트가 화면 위까지 올라와도 상태바와 겹치지 않게 */
+    box-sizing:border-box;
+    padding-top: calc(var(--sa-top) + 8px);
+    padding-bottom: var(--sa-bottom);
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal{
+    /* 모달은 연출자만 보는 UI라 스킨·테마와 무관하게 항상 동일하게 읽히도록
+       변수를 여기서 다시 정의한다 (라이트 위장 스킨에서 검은 글씨가 되는 문제 방지) */
+    --cream:#F2F2F7; --muted-rgb:255,255,255; --panel-line:rgba(255,255,255,0.10);
+    --gold:#8E9199; --gold-bright:#FFFFFF; --on-accent:#000000; --ink:#000000;
+    --ruby:#FF453A; --accent:#0A84FF;
+    width:100%; max-width:480px; background:#141416; color:var(--cream);
+    border-radius: 18px 18px 0 0; border:1px solid rgba(255,255,255,0.10);
+    padding:16px; max-height:100%; display:flex; flex-direction:column; overflow-y:auto;
+  }
+  .modal-header{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;
+  }
+  .modal-header h3{ font-family:-apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; font-size:18px; margin:0; }
+  .modal-header button{
+    background:none; border:none; color: rgba(var(--muted-rgb),0.6); font-size:18px; cursor:pointer;
+  }
+  .deck-scroll{ overflow:visible; border-radius:10px; border:1px solid var(--panel-line); background: rgba(0,0,0,0.14); max-height:none; }
+  .deck-item{
+    padding:10px 14px; border-bottom:1px solid var(--panel-line);
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+  }
+  .deck-item .deck-main{ flex:1; cursor:pointer; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .deck-item .deck-name{ font-size:14px; font-weight:500; color: rgba(var(--muted-rgb),0.75); }
+  .deck-item .deck-src{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; color: rgba(var(--muted-rgb),0.4); }
+  .deck-item.active .deck-name{ color: var(--gold-bright); font-weight:700; }
+  .deck-item.active .deck-src{ color: rgba(228,200,120,0.7); }
+  .view-btn{
+    background: rgba(0,0,0,0.2); border:1px solid var(--panel-line); color: var(--gold);
+    font-size:11px; padding:7px 10px; border-radius:8px; cursor:pointer; white-space:nowrap;
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  }
+
+  /* stack full-view modal */
+  .stack-grid{
+    display:grid; grid-template-columns: repeat(4,1fr); gap:5px;
+    overflow-y:auto; max-height:70vh; padding:2px;
+  }
+  .stack-cell{
+    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:12px;
+    padding:6px 5px; border-radius:6px; background: rgba(0,0,0,0.16);
+    display:flex; align-items:baseline; gap:5px;
+  }
+  .stack-cell .idx{ color: rgba(var(--muted-rgb),0.35); font-size:10px; }
+  .stack-cell .cardv.red{ color: var(--ruby); }
+  .stack-cell .cardv.black{ color: var(--cream); }
+  .deck-item:last-child{ border-bottom:none; }
+  .deck-item.active{ background: rgba(228,200,120,0.14); color: var(--gold-bright); font-weight:700; }
+  .deck-item.disabled{ opacity:0.4; }
+  .deck-item .deck-src{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; color: rgba(var(--muted-rgb),0.4); }
+  .deck-item.active .deck-src{ color: rgba(228,200,120,0.7); }
+
+  .deck-current{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px; border-radius:14px; cursor:pointer;
+    background:rgba(255,255,255,0.06); border:1px solid var(--panel-line);
+  }
+  .dc-label{ font-size:11.5px; color:rgba(var(--muted-rgb),0.45); }
+  .dc-name{ font-size:16px; font-weight:600; color:var(--cream); margin-top:2px; }
+  .dc-chevron{ font-size:22px; color:rgba(var(--muted-rgb),0.35); }
+
+  .custom-box{ margin-top:12px; }
+  .custom-inline{
+    padding:12px 14px 14px; border-bottom:1px solid var(--panel-line);
+    background:rgba(0,0,0,0.18);
+  }
+  .opt-row{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; margin-bottom:8px;
+  }
+  .opt-name{ font-size:13px; color: rgba(var(--muted-rgb),0.75); }
+  .opt-seg{ display:flex; gap:4px; background:rgba(0,0,0,0.25); border-radius:9px; padding:3px; }
+  .opt-seg button{
+    border:none; background:transparent; color:rgba(var(--muted-rgb),0.6);
+    font-size:12px; font-weight:600; padding:6px 11px; border-radius:7px; cursor:pointer;
+    white-space:nowrap;
+  }
+  .opt-seg button.active{ background:var(--gold-bright); color:var(--on-accent); }
+  .opt-hint{ font-size:11.5px; color: rgba(var(--muted-rgb),0.35); margin:-2px 0 8px; }
+
+  /* 계산기 기록 패널 */
+  .hist-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:11px 2px; border-bottom:1px solid var(--panel-line); font-size:14px;
+    color:rgba(var(--muted-rgb),0.6);
+  }
+  .hist-row b{ color:var(--cream); font-weight:600; font-size:16px; }
+  .hist-row b.red{ color:#FF453A; }
+  .hist-empty{ color:rgba(var(--muted-rgb),0.3); }
+  .hist-sub{
+    font-size:11.5px; color:rgba(var(--muted-rgb),0.4);
+    padding:14px 2px 6px; letter-spacing:0.02em;
+  }
+  .hist-out{
+    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    padding:11px 12px; margin-bottom:6px; border-radius:12px;
+    background:rgba(255,255,255,0.05); border:1px solid transparent; cursor:pointer;
+  }
+  .hist-out.sel{ border-color:var(--accent); background:rgba(10,132,255,0.14); }
+  .ho-cut{ font-weight:600; font-size:14px; color:var(--cream); }
+  .ho-method{ font-size:12.5px; color:rgba(var(--muted-rgb),0.5); }
+  .hist-instant{
+    padding:11px 12px; margin-bottom:6px; border-radius:12px; font-size:13.5px;
+    background:rgba(48,209,88,0.14); border:1px solid rgba(48,209,88,0.32); color:var(--cream);
+  }
+  .hist-guide{
+    padding:10px 12px; margin-bottom:6px; border-radius:12px;
+    background:rgba(255,255,255,0.05); border:1px solid transparent;
+  }
+  .hist-guide.sel{ border-color:var(--accent); background:rgba(10,132,255,0.12); }
+  .hist-guide b{ font-size:17px; color:var(--cream); }
+  .hg-how{ font-size:12px; color:rgba(var(--muted-rgb),0.45); margin-left:4px; }
+  .hg-line{ font-size:13px; color:rgba(var(--muted-rgb),0.8); margin-top:3px; }
+  .hg-note{ font-size:11.5px; color:rgba(var(--muted-rgb),0.38); margin-top:2px; }
+
+  /* ---- 결과 화면 (연출 중 빠르게 읽는 것이 최우선) ---- */
+  .res-head{
+    display:flex; align-items:baseline; gap:8px; padding:2px 2px 12px;
+  }
+  .res-meta{
+    font-size:13px; letter-spacing:-0.01em;
+    color: rgba(var(--muted-rgb),0.42);
+  }
+  .res-meta b{ color:var(--cream); font-weight:600; }
+
+  /* 리퀴드 글래스 패널 */
+  .hero{
+    position:relative; border-radius:26px; padding:30px 20px 26px;
+    margin-bottom:16px; overflow:hidden;
+    background:linear-gradient(160deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05));
+    border:1px solid rgba(255,255,255,0.14);
+    backdrop-filter:blur(24px) saturate(180%);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+    box-shadow:0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.22);
+  }
+  .hero-index{
+    position:absolute; top:14px; left:16px;
+    display:flex; align-items:center; gap:3px;
+    font-size:15px; font-weight:600; letter-spacing:-0.01em;
+    opacity:0.85;
+  }
+  .hero-index.red{ color:var(--ruby); }
+  .hero-index.black{ color:var(--cream); }
+
+  .hero-cut{
+    font-size:44px; font-weight:600; line-height:1.05; text-align:center;
+    letter-spacing:-0.03em; color:#fff;
+  }
+  .hero-method{
+    margin-top:10px; text-align:center;
+    font-size:14px; letter-spacing:-0.01em;
+    color: rgba(var(--muted-rgb),0.55);
+  }
+
+  .hero-shortcut{
+    margin-top:8px; text-align:center; font-size:12.5px;
+    color: rgba(var(--muted-rgb),0.42); letter-spacing:-0.01em;
+  }
+  .hero-warn{
+    margin-top:12px; text-align:center;
+    font-size:12px; letter-spacing:-0.01em; color:var(--ruby);
+  }
+  .alt-item.heavy .alt-cut{ color:rgba(var(--muted-rgb),0.45); }
+  .alt-item.heavy .alt-cut::after{ content:' ⚠'; color:var(--ruby); font-size:10px; }
+
+  .second{
+    border-radius:16px; padding:12px 14px; margin-bottom:12px;
+    background:rgba(255,255,255,0.05); border:1px solid var(--panel-line);
+  }
+  .second-tag{ font-size:11px; color: rgba(var(--muted-rgb),0.4); margin-bottom:5px; }
+  .second-row{ display:flex; align-items:baseline; gap:10px; }
+  .second-card{ font-size:19px; font-weight:700; }
+  .second-card.red{ color:var(--ruby); }
+  .second-cut{ font-size:19px; font-weight:600; color:#fff; }
+  .second-method{ font-size:12.5px; color: rgba(var(--muted-rgb),0.5); margin-top:3px; }
+
+  /* 훈련 모드 */
+  .train-card{
+    text-align:center; padding:26px 12px; border-radius:16px; margin:10px 0 12px;
+    background:rgba(255,255,255,0.05); border:1px solid var(--panel-line);
+  }
+  .train-q{ font-size:46px; font-weight:700; line-height:1.1; color:var(--cream); }
+  .train-q.red{ color:var(--ruby); }
+  .train-ask{ font-size:13px; color:rgba(var(--muted-rgb),0.45); margin-top:6px; }
+  .train-a{
+    font-size:38px; font-weight:700; color:var(--gold-bright);
+    margin-top:14px; padding-top:12px; border-top:1px solid var(--panel-line);
+  }
+  .train-a.red{ color:var(--ruby); }
+  .train-sub{ display:block; font-size:12px; font-weight:400; color:rgba(var(--muted-rgb),0.45); margin-top:5px; }
+  .train-btns{ display:flex; gap:8px; }
+  .train-stat{ text-align:center; font-size:12px; color:rgba(var(--muted-rgb),0.4); margin-top:10px; }
+
+  .alts{ border-top:1px solid var(--panel-line); padding-top:4px; }
+  .alts summary{
+    cursor:pointer; font-size:13px; letter-spacing:-0.01em;
+    color: rgba(var(--muted-rgb),0.45);
+    padding:11px 2px; list-style:none;
+  }
+  .alts summary::-webkit-details-marker{ display:none; }
+  .alts summary::after{ content:' ▾'; }
+  .alts[open] summary::after{ content:' ▴'; }
+  .alt-item{
+    display:flex; align-items:baseline; gap:12px;
+    padding:12px 6px; border-bottom:1px solid var(--panel-line);
+    border-radius:10px; cursor:pointer;
+  }
+  .alt-item:active{ background:rgba(var(--muted-rgb),0.08); }
+  .alt-cut{
+    font-weight:600; font-size:14px; letter-spacing:-0.01em;
+    color:var(--cream); min-width:104px;
+  }
+  .alt-method{
+    font-size:13px; color: rgba(var(--muted-rgb),0.45); letter-spacing:-0.01em;
+  }
+  .alt-note{ font-size:11px; color:rgba(var(--muted-rgb),0.35); padding:11px 4px 2px; }
+
+  /* 기록 패널의 재입력 버튼 */
+  .hist-actions{ display:flex; gap:8px; padding:12px 0 2px; }
+  .hist-act{
+    flex:1; padding:11px 8px; border-radius:11px; cursor:pointer;
+    border:1px solid var(--panel-line); background:rgba(255,255,255,0.06);
+    color:var(--cream); font-size:13px; font-weight:600;
+  }
+  .hist-act:active{ background:rgba(255,255,255,0.13); }
+
+  /* 숫자 먼저 모드의 '카드 입력 →' */
+  .dock-label button.dock-next{
+    text-decoration:none; font-family:inherit; font-size:12px; font-weight:600;
+    color:#fff; background:var(--accent); border-radius:8px; padding:6px 11px; margin:0;
+  }
+  .dock-label button.dock-next[disabled]{ opacity:0.32; }
+
+  /* .dock-label button(밑줄 링크)보다 뒤·같은 특이도로는 이길 수 없어 선택자를 맞춘다 */
+  .dock-label button.undo-reset, .undo-reset{
+    border:none; background:rgba(var(--muted-rgb),0.13); color:var(--cream);
+    font-family:inherit; font-size:12.5px; font-weight:600;
+    padding:7px 13px; margin:0; border-radius:9px; cursor:pointer;
+    text-decoration:none; letter-spacing:-0.01em;
+  }
+  .dock-label button.undo-reset:active{ background:rgba(var(--muted-rgb),0.22); }
+
+  /* 가로로 돌려도 화면이 깨지지 않게 (손목이 돌아가는 상황 대비) */
+  @media (orientation: landscape) and (max-height: 520px){
+    .stage{ padding:2px 14px 6px; }
+    .panel{ padding:9px 12px; margin-bottom:8px; }
+    .hero{ padding:12px 16px; margin-bottom:8px; border-radius:16px; }
+    .hero-cut{ font-size:30px; }
+    .hero-method{ font-size:12.5px; margin-top:5px; }
+    .hero-shortcut, .hero-warn{ margin-top:5px; font-size:11.5px; }
+    /* body가 이미 안전영역을 처리하므로 여기서 또 더하면 이중이 된다 */
+    .dock{ padding:6px 12px 4px; }
+    .dock-label{ margin-bottom:5px; }
+    .rank-btn{ padding:7px 0; font-size:15px; }
+    .suit-btn{ padding:7px 0; font-size:21px; }
+    .key-btn{ padding:8px 0; }
+    .keypad-display{ font-size:22px; padding:2px 0 5px; min-height:0; }
+    .rank-grid, .suit-grid, .keypad-grid{ gap:5px; }
+    .mv-item, .guide-item{ padding:6px 4px; }
+    .brand h1{ font-size:18px; }
+    .eyebrow{ display:none; }
+  }
+
+  .done-bar{ display:flex; gap:8px; }
+  .done-btn{
+    flex:1; padding:14px 8px; border-radius:14px;
+    border:1px solid rgba(255,255,255,0.10); background:rgba(255,255,255,0.07);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    color: rgba(var(--muted-rgb),0.8); font-size:14px; font-weight:500;
+    letter-spacing:-0.01em; cursor:pointer; transition:transform .1s ease;
+  }
+  .done-btn:active{ transform:scale(0.97); }
+  .done-btn.primary{ background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+
+  /* 숫자 불필요 알림 */
+  .instant{
+    border-radius:14px; padding:11px 14px; margin-bottom:10px;
+    background:rgba(48,209,88,0.12); border:1px solid rgba(48,209,88,0.35);
+  }
+  .instant-tag{
+    font-size:11px; letter-spacing:0.02em; color:var(--zone-easy);
+    font-weight:700; margin-bottom:4px;
+  }
+  .instant-how{ font-size:14px; color:var(--cream); line-height:1.45; }
+
+  /* 다음 수 제안 */
+  .mv-item{ padding:9px 4px; border-bottom:1px solid var(--panel-line); }
+  .mv-item:last-child{ border-bottom:none; }
+  .mv-top{ display:flex; align-items:baseline; gap:8px; }
+  .mv-tag{
+    font-size:10.5px; font-weight:700; letter-spacing:0.02em;
+    color:var(--cream); background: rgba(var(--muted-rgb),0.14);
+    padding:2px 7px; border-radius:6px; flex:0 0 auto;
+  }
+  .mv-item.best .mv-tag{ background:var(--gold-bright); color:var(--on-accent); }
+  .mv-item.strong .mv-tag{ background:var(--zone-easy); color:#04210b; }
+  .mv-title{ font-size:14px; font-weight:600; color:var(--cream); letter-spacing:-0.01em; }
+  .mv-body{ font-size:12.5px; color: rgba(var(--muted-rgb),0.5); margin-top:3px; line-height:1.45; }
+
+  /* 숫자 유도 */
+  .guide-item{
+    padding:8px 4px; border-bottom:1px solid var(--panel-line);
+  }
+  .guide-item:last-child{ border-bottom:none; }
+  .guide-top{ display:flex; align-items:baseline; gap:9px; }
+  .guide-n{
+    font-size:19px; font-weight:700; color:var(--cream); min-width:28px;
+  }
+  .guide-item.best .guide-n{ color:var(--gold-bright); }
+  .guide-how{ font-size:12.5px; color: rgba(var(--muted-rgb),0.45); }
+  .guide-line{ font-size:13px; color: rgba(var(--muted-rgb),0.85); margin-top:2px; }
+  .guide-note{ font-size:11px; color: rgba(var(--muted-rgb),0.35); margin-top:1px; }
+  .dbl-item{ padding:8px 4px; border-bottom:1px solid var(--panel-line); }
+  .dbl-item:last-child{ border-bottom:none; }
+  .dbl-top{ display:flex; align-items:baseline; gap:9px; }
+  .dbl-n{ font-size:19px; font-weight:700; color:var(--cream); min-width:28px; }
+  .dbl-item.best .dbl-n{ color:var(--gold-bright); }
+  .dbl-how{ font-size:12.5px; color: rgba(var(--muted-rgb),0.45); }
+  .dbl-line{ font-size:13px; color: rgba(var(--muted-rgb),0.85); margin-top:2px; }
+  .dbl-alt{ font-size:11.5px; color: rgba(var(--muted-rgb),0.4); margin-top:1px; }
+  .dbl-none{ font-size:13px; color: rgba(var(--muted-rgb),0.6); line-height:1.5; }
+  .skin-grid{ display:grid; grid-template-columns: repeat(2,1fr); gap:8px; }
+  .skin-btn{
+    padding:10px 8px; border-radius:10px; border:1px solid var(--panel-line);
+    background: rgba(0,0,0,0.18); color: rgba(var(--muted-rgb),0.7);
+    font-size:12px; font-weight:600; cursor:pointer; text-align:center;
+  }
+  .skin-btn.active{ background: var(--gold); color: var(--ink); border-color: var(--gold); }
+  .custom-label{ font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size:10px; color: rgba(var(--muted-rgb),0.5); margin-bottom:6px; }
+  .custom-input{
+    width:100%; min-height:60px; border-radius:10px; border:1px solid var(--panel-line);
+    background: rgba(0,0,0,0.2); color:var(--cream); font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size:12px; padding:10px; resize:vertical;
+  }
+  .custom-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; }
+  .custom-status{ font-size:11px; color: rgba(var(--muted-rgb),0.5); flex:1; }
+  .custom-status.ok{ color: var(--zone-easy); }
+  .custom-status.error{ color: var(--zone-hard); }
+  .custom-apply-btn{
+    background: var(--gold); color: var(--ink); border:none; border-radius:8px;
+    padding:9px 16px; font-weight:700; font-size:12px; cursor:pointer; white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="notes-back-chevron"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5.5L8 12l7 6.5"/></svg></div>
+      <div class="brand">
+        <div class="eyebrow">Any Card · Any Number</div>
+        <h1>ACAAN Calculator</h1>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="notes-undo-icon">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/></svg>
+      </div>
+      <div class="notes-share-pill">
+        <span class="notes-share-tap" id="notesShareBtn"><svg class="notes-share-icon" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2v11.6"/><path d="M8.1 7.1L12 3.2l3.9 3.9"/><path d="M6 11.6h-.4a2.2 2.2 0 0 0-2.2 2.2v5.6a2.2 2.2 0 0 0 2.2 2.2h12.8a2.2 2.2 0 0 0 2.2-2.2v-5.6a2.2 2.2 0 0 0-2.2-2.2H18"/></svg></span>
+        <button class="icon-btn" id="gearBtn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.88.34l-.6.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg></button>
+      </div>
+      <button class="new-card-btn" id="newCardBtn" style="display:none;">새 카드</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage"></div>
+
+  <div class="dock" id="dock"></div>
+
+</div>
+
+<div class="modal-overlay" id="deckModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>설정</h3>
+      <button id="closeModalBtn">✕</button>
+    </div>
+    <div class="deck-current" id="deckCurrentRow">
+      <div>
+        <div class="dc-label">셋업덱</div>
+        <div class="dc-name" id="dcName"></div>
+      </div>
+      <span class="dc-chevron">›</span>
+    </div>
+
+    <div class="custom-box">
+      <div class="custom-label">연출 옵션</div>
+      <div class="opt-row">
+        <span class="opt-name">아웃 우선순위</span>
+        <div class="opt-seg" id="sortModeSeg"></div>
+      </div>
+      <div class="opt-row">
+        <span class="opt-name">입력 순서</span>
+        <div class="opt-seg" id="inputOrderSeg"></div>
+      </div>
+      <div class="opt-row">
+        <span class="opt-name">바텀카드 단계</span>
+        <div class="opt-seg" id="bottomStepSeg"></div>
+      </div>
+      <div class="opt-row">
+        <span class="opt-name">화면 테마</span>
+        <div class="opt-seg" id="themeSeg"></div>
+      </div>
+
+    </div>
+
+    <div class="custom-box">
+      <div class="custom-label">훈련</div>
+      <button class="custom-apply-btn" id="openTrainBtn" style="width:100%; padding:12px; margin-bottom:4px;">스택 암기 훈련 시작</button>
+      <div class="opt-hint">실전에서는 폰을 보지 않는 것이 최선입니다. 반복해서 위치를 외우세요.</div>
+    </div>
+
+    <div class="custom-box">
+      <div class="custom-label">스킨 (다른 앱으로 위장)</div>
+      <div class="skin-grid" id="skinGrid"></div>
+    </div>
+
+    <div class="custom-box">
+      <div class="custom-label">도구</div>
+      <button class="custom-apply-btn" id="gotoFaroBtn" style="width:100%; padding:12px; margin-bottom:8px;">Faro Spectrum 열기</button>
+      <button class="custom-apply-btn" id="gotoHomeBtn" style="width:100%; padding:12px; margin-bottom:4px; background:rgba(var(--muted-rgb),0.10); color:var(--cream);">선택 화면으로</button>
+      <div class="opt-hint">선택 화면에서 앱 실행 시 어느 도구를 먼저 열지 정할 수 있습니다.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay" id="deckPickerOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>셋업덱 선택</h3>
+      <button id="closeDeckPickerBtn">✕</button>
+    </div>
+    <div class="deck-scroll" id="deckScroll"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="trainOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>훈련</h3>
+      <button id="closeTrainBtn">✕</button>
+    </div>
+    <div class="opt-row">
+      <span class="opt-name">방향</span>
+      <div class="opt-seg" id="trainDirSeg"></div>
+    </div>
+    <div id="trainBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="calcHistOverlay">
+  <div class="modal" id="calcHistModal">
+    <div class="modal-header">
+      <h3>기록</h3>
+      <button id="closeCalcHistBtn">✕</button>
+    </div>
+    <div id="calcHistBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="stackViewOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="stackViewTitle">Deck</h3>
+      <button id="closeStackViewBtn">✕</button>
+    </div>
+    <div class="stack-grid" id="stackGrid"></div>
+  </div>
+</div>
+
+<script>
+// ================= 데이터 =================
+const DECKS = {
+  ndo: { label:'New Deck Order', source:'Default', cards:[
+    'AH','2H','3H','4H','5H','6H','7H','8H','9H','10H','JH','QH','KH',
+    'AC','2C','3C','4C','5C','6C','7C','8C','9C','10C','JC','QC','KC',
+    'KD','QD','JD','10D','9D','8D','7D','6D','5D','4D','3D','2D','AD',
+    'KS','QS','JS','10S','9S','8S','7S','6S','5S','4S','3S','2S','AS'
+  ]},
+  faro4: { label:'4x Out-Faro', source:'NDO based', cards:[
+    'AH','4C','7D','4S','AC','10D','7S','JH','KD','10S','8H','JC','KS',
+    '5H','8C','3D','2H','5C','6D','3S','2C','9D','6S','QH','QD','9S',
+    '9H','QC','QS','6H','9C','2D','3H','6C','5D','2S','3C','8D','5S',
+    'KH','JD','8S','10H','KC','JS','7H','10C','AD','4H','7C','4D','AS'
+  ]},
+  mnemonica: { label:'Mnemonica', source:'Juan Tamariz', cards:[
+    '4C','2H','7D','3C','4H','6D','AS','5H','9S','2S','QH','3D','QC',
+    '8H','6S','5S','9H','KC','2D','JH','3S','8S','6H','10C','5D','KD',
+    '2C','3H','8D','5C','KS','JD','8C','10S','KH','JC','7S','10H','AD',
+    '4S','7H','4D','AC','9C','JS','QD','7C','QS','10D','6C','AH','9D'
+  ]},
+  aronson: { label:'Aronson Stack', source:'Simon Aronson', cards:[
+    'JS','KC','5C','2H','9S','AS','3H','6C','8D','AC','10S','5H','2D',
+    'KD','7D','8C','3S','AD','7S','5S','QD','AH','8S','3D','7H','QH',
+    '5D','7C','4H','KH','4D','10D','JC','JH','10C','JD','4S','10H','6H',
+    '3C','2S','9H','KS','6S','4C','8H','9C','QS','6D','QC','2C','9D'
+  ]},
+  memorandum: { label:'Memorandum', source:'Woody Aragón', cards:[
+    'JS','7C','10H','AD','4C','7H','4D','AS','4H','7D','4S','AH','10D',
+    '7S','JC','KD','10S','8C','JH','AC','KS','5C','8H','3D','QS','KH',
+    '9C','QH','6C','9H','2D','3C','6H','5D','2S','3H','8D','5S','KC',
+    'JD','8S','10C','2C','5H','6D','3S','2H','9D','6S','QC','QD','9S'
+  ]},
+  froe: { label:'F.R.O.E.', source:'Benke Smith', cards:[
+    'AH','3D','4C','5D','7H','JD','KH','2S','6C','8S','9H','10S','QC',
+    'AD','3H','4S','5H','7D','JH','KD','2C','6S','8C','9D','10C','QS',
+    'AS','3C','4D','5C','7S','JC','KS','2H','6D','8H','9S','10H','QD',
+    'AC','3S','4H','5S','7C','JS','KC','2D','6H','8D','9C','10D','QH'
+  ]},
+  sistebbins: { label:'Si Stebbins', source:'Si Stebbins', cards:[
+    'AH','4S','7D','10C','KH','3S','6D','9C','QH','2S','5D','8C','JH',
+    'AS','4D','7C','10H','KS','3D','6C','9H','QS','2D','5C','8H','JS',
+    'AD','4C','7H','10S','KD','3C','6H','9S','QD','2C','5H','8S','JD',
+    'AC','4H','7S','10D','KC','3H','6S','9D','QC','2H','5S','8D','JC'
+  ]},
+  shcf: { label:'SHCF', source:'Si Stebbins variant', cards:[
+    'AS','4H','7C','10D','KS','3H','6C','9D','QS','2H','5C','8D','JS',
+    'AH','4C','7D','10S','KH','3C','6D','9S','QH','2C','5D','8S','JH',
+    'AC','4D','7S','10H','KC','3D','6S','9H','QC','2D','5S','8H','JC',
+    'AD','4S','7H','10C','KD','3S','6H','9C','QD','2S','5H','8C','JD'
+  ]},
+  nikola: { label:'Nikola Stack', source:'Louis Nikola', cards:[
+    '6D','5C','KC','JH','5S','9D','9S','QH','3C','10C','KS','AH','4D',
+    'JD','KD','KH','2D','QC','9C','10H','8D','2C','AC','7H','7C','4S',
+    '7S','9H','8S','6S','6C','2H','AS','JS','4C','5H','10S','AD','JC',
+    '4H','2S','7D','QS','3H','3S','8C','10D','6H','5D','3D','QD','8H'
+  ]},
+  eightkings: { label:'Eight Kings', source:'Eight Kings', cards:[
+    '8C','KH','3S','10D','2C','7H','9S','5D','QC','4H','AS','6D','JC',
+    '8H','KS','3D','10C','2H','7S','9D','5C','QH','4S','AD','6C','JH',
+    '8S','KD','3C','10H','2S','7D','9C','5H','QS','4D','AC','6H','JS',
+    '8D','KC','3H','10S','2D','7C','9H','5S','QD','4C','AH','6S','JD'
+  ]},
+  custom: { label:'Custom', source:'User-defined', cards:null }
+};
+
+const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K'];
+const SUITS = [
+  { code:'H', symbol:'♥', color:'red' },
+  { code:'C', symbol:'♣', color:'black' },
+  { code:'D', symbol:'♦', color:'red' },
+  { code:'S', symbol:'♠', color:'black' }
+];
+
+
+// ================= 스킨 (다른 앱으로 위장) =================
+const SKINS = {
+  felt:        { name:'기본 (매직)', appTitle:'Spectrum' },
+  'ios-calc':  { name:'iOS 계산기', appTitle:'계산기' },
+  'ios-notes': { name:'iOS 메모', appTitle:'메모' },
+  'android-calc': { name:'삼성 계산기', appTitle:'계산기' }
+};
+
+function applySkin(key){
+  if(!SKINS[key]) key = 'felt';
+  document.body.dataset.skin = key;
+  document.title = SKINS[key].appTitle;
+  // 홈 화면에 추가할 때 표시될 앱 이름도 스킨에 맞춤 (위장 유지)
+  const metaTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if(metaTitle) metaTitle.setAttribute('content', SKINS[key].appTitle);
+  const h1 = document.querySelector('.brand h1');
+  if(h1) h1.textContent = SKINS[key].appTitle;
+  localStorage.setItem('acaan_skin', key);
+  renderSkinGrid();
+  if(typeof renderAll === 'function') renderAll();
+}
+
+// 연출 옵션(정렬 방식 / 입력 순서) 렌더
+function renderOptions(){
+  const defs = [
+    { el:'sortModeSeg', key:'sortMode', opts:[['cut','컷 최소'],['simple','기법 최소']] },
+    { el:'inputOrderSeg', key:'inputOrder', opts:[['card','카드 먼저'],['number','숫자 먼저']] },
+    { el:'themeSeg', key:'theme', opts:[['system','시스템'],['light','라이트'],['dark','다크']] },
+    { el:'bottomStepSeg', key:'useBottomStep', opts:[[false,'생략'],[true,'사용']] }
+  ];
+  defs.forEach(d=>{
+    const box = document.getElementById(d.el);
+    if(!box) return;
+    box.innerHTML = '';
+    d.opts.forEach(([val,label])=>{
+      const b = document.createElement('button');
+      b.className = state[d.key] === val ? 'active' : '';
+      b.textContent = label;
+      b.onclick = ()=>{
+        state[d.key] = val;
+        try{ localStorage.setItem('acaan_'+d.key, val); }catch(e){}
+        if(d.key === 'theme'){ applyTheme(); }
+        if(d.key === 'inputOrder'){
+          // 순서를 바꾸면 진행 중인 입력을 초기화
+          resetTrick();
+        }
+        renderAll();
+      };
+      box.appendChild(b);
+    });
+  });
+}
+
+function renderSkinGrid(){
+  const grid = document.getElementById('skinGrid');
+  if(!grid) return;
+  const current = document.body.dataset.skin || 'felt';
+  grid.innerHTML = '';
+  Object.keys(SKINS).forEach(key=>{
+    const btn = document.createElement('div');
+    btn.className = 'skin-btn' + (current===key ? ' active':'');
+    btn.textContent = SKINS[key].name;
+    btn.onclick = ()=> applySkin(key);
+    grid.appendChild(btn);
+  });
+}
+
+// ================= 저장/불러오기 (localStorage) =================
+const LS_KEYS = { deck:'acaan_deckKey', custom:'acaan_customCards' };
+function persistDeckChoice(){
+  try{
+    localStorage.setItem(LS_KEYS.deck, state.deckKey);
+    if(state.deckKey === 'custom' && DECKS.custom.cards){
+      localStorage.setItem(LS_KEYS.custom, JSON.stringify(DECKS.custom.cards));
+    }
+  }catch(e){}
+}
+function loadPersisted(){
+  try{
+    const savedCustom = localStorage.getItem(LS_KEYS.custom);
+    if(savedCustom) DECKS.custom.cards = JSON.parse(savedCustom);
+    const savedDeck = localStorage.getItem(LS_KEYS.deck);
+    if(savedDeck && DECKS[savedDeck] && DECKS[savedDeck].cards) state.deckKey = savedDeck;
+    const savedSkin = localStorage.getItem('acaan_skin');
+    const savedSort = localStorage.getItem('acaan_sortMode');
+    if(savedSort === 'cut' || savedSort === 'simple') state.sortMode = savedSort;
+    const savedOrder = localStorage.getItem('acaan_inputOrder');
+    if(savedOrder === 'card' || savedOrder === 'number') state.inputOrder = savedOrder;
+    const savedTheme = localStorage.getItem('acaan_theme');
+    if(['system','light','dark'].includes(savedTheme)) state.theme = savedTheme;
+    const savedBottom = localStorage.getItem('acaan_useBottomStep');
+    if(savedBottom === 'true' || savedBottom === 'false') state.useBottomStep = (savedBottom === 'true');
+    applyTheme();
+    state.mode = startMode();
+    applySkin(savedSkin || 'felt');
+  }catch(e){}
+}
+
+// ================= 상태 =================
+let state = {
+  deckKey: 'faro4',
+  rank: null,
+  suit: null,
+  mode: 'card',      // 'card' | 'bottom' | 'number'
+  bottomRank: null,
+  bottomSuit: null,
+  numBuffer: '',
+  spectatorNum: null,
+  noteLines: [],      // 노트 스킨: 실제 타이핑한 것처럼 누적되는 줄들
+  altIndex: 0,        // 계산기 스킨: 현재 보고 있는 아웃 번호 (시계 아이콘으로 순환)
+  sortMode: 'cut',    // 'cut'=컷 최소 우선 / 'simple'=기법 단순 우선
+  inputOrder: 'card', // 'card'=카드 먼저 / 'number'=숫자 먼저
+  theme: 'system',    // 'system' | 'light' | 'dark'
+  useBottomStep: false, // 바텀카드 글림스 단계를 흐름에 넣을지
+  rank2: null, suit2: null, // 더블 버글라스용 두 번째 카드
+  notesHidden: false      // 메모 스킨: 관객에게 보여줄 때 힌트 줄 감추기
+};
+let notesSubmitFn = null; // 노트 스킨: 현재 입력창의 제출 함수 (상단 노란 체크가 호출)
+
+// ================= 유틸 =================
+function mod52(x){ return ((x % 52) + 52) % 52; }
+
+function getPosition(deckKey, rank, suit){
+  const code = rank + suit;
+  const idx = DECKS[deckKey].cards.indexOf(code);
+  return idx === -1 ? null : idx + 1;
+}
+
+function classifyPos(pos){
+  if(pos <= 10) return { key:'easy', label:'낮음' };
+  if(pos <= 26) return { key:'mid', label:'중간' };
+  return { key:'hard', label:'높음' };
+}
+
+
+
+// 스택을 s장 컷했을 때(위→아래), 원래 origPos에 있던 카드의 현재 위치
+function shiftPosition(origPos, s){ return mod52(origPos - 1 - s) + 1; }
+
+// ===== 숫자를 물어볼 필요조차 없는 위치 (맨위/맨아래/센터 양옆과 그 두 번째 카드) =====
+// 이 8자리에 걸리면 관객에게 숫자를 요청하지 않고 곧바로 공개하는 편이 훨씬 강하다.
+// 두 축으로 본다: (1) 지금 이 상태의 위치, (2) 센터 컷 직후의 위치(항상 회전 26).
+// 센터는 고정 크림프라 '현재 위치 25~28'이 아니라 '센터 기준 위치'로 따져야
+// 덱이 이미 컷된 상태에서도 판정이 어긋나지 않는다.
+const REVEAL_TOP = {
+  1:  '맨 위 카드를 뒤집게 한다',
+  2:  '맨 위 카드를 덱 중간에 넣게 한 뒤 → 맨 위 카드 공개',
+  51: '덱을 뒤집어 바닥 1장을 중간에 넣게 한 뒤 → 바닥 공개',
+  52: '덱을 통째로 뒤집어 바닥을 보게 한다'
+};
+const REVEAL_BRIDGE = {
+  1:  '센터 컷 → 테이블에 남은 더미의 맨 위 카드',
+  2:  '센터 컷 → 남은 더미 맨 위 1장을 없앤 뒤 그 다음 장',
+  51: '센터 컷 → 떼어낸 묶음을 뒤집고, 바닥 1장을 치운 뒤 그 다음 장',
+  52: '센터 컷 → 떼어낸 묶음을 뒤집으면 바로 그 바닥'
+};
+function instantReveal(pos, rot){
+  const cur = shiftPosition(pos, rot);
+  if(REVEAL_TOP[cur]) return REVEAL_TOP[cur];
+  const bp = shiftPosition(pos, 26);
+  if(REVEAL_BRIDGE[bp]) return REVEAL_BRIDGE[bp];
+  return null;
+}
+
+// ===== 숫자 유도 멘트 =====
+// 목표 숫자에 따라 어떤 표현을 써야 그 근처가 나오는지 (일반인/마술사 반응 차이 포함)
+function patterFor(n){
+  if(n <= 3)  return { line:'"숫자를 하나 말씀해 주세요… 작은 숫자로요"', note:'일반인 2~3' };
+  if(n <= 5)  return { line:'"숫자를 하나 말씀해 주세요… 작은 숫자로요"', note:'마술사 4~5' };
+  if(n <= 9)  return { line:'"숫자를 하나 말씀해 주세요"', note:'보통 6~9' };
+  if(n <= 12) return { line:'"너무 크지 않은 숫자로 하나 말씀해 주세요"', note:'일반인 7 · 마술사 8~9' };
+  if(n <= 19) return { line:'"숫자를 하나… 조금 어렵게 만들어 볼까요"', note:'10대 후반~20대' };
+  if(n <= 29) return { line:'"어렵게 만들어 봅시다 — 중간 어디쯤으로요"', note:'주로 20대' };
+  return        { line:'"최대한 어렵게 만들어 보세요"', note:'30~40대' };
+}
+
+// 컷 없이 지금 상태에서 각 방향이 요구하는 숫자
+function guideNumbers(pos, rot){
+  const cur = shiftPosition(pos, rot);
+  const afterBridge = shiftPosition(pos, 26);
+  return [
+    { how:'위에서 카운트',            n: cur },
+    { how:'아래에서 카운트',          n: 53 - cur },
+    { how:'센터 컷 후 위에서',    n: afterBridge },
+    { how:'센터 컷 후 아래에서',  n: 53 - afterBridge }
+  ].filter(x=>x.n>=1 && x.n<=52).sort((a,b)=>a.n-b.n);
+}
+
+// 글림스한 "현재 바텀 카드"의 원래 스택 위치(Q)로부터 이미 적용된 회전량(s) 역산
+// 단 한 번의 컷으로는 스택 순서(순환) 자체는 바뀌지 않으므로, 바텀 카드 하나만 알면
+// 전체 회전량을 정확히 알 수 있음
+function getRotation(){
+  if(!state.bottomRank || !state.bottomSuit) return 0;
+  const Q = getPosition(state.deckKey, state.bottomRank, state.bottomSuit);
+  if(Q === null) return 0;
+  return mod52(Q);
+}
+
+// 애니넘버 아웃 계산. s = 바텀카드 글림스로 이미 알고 있는 현재 회전량(기본 0 = 새 스택 그대로)
+// - 위에서 카운트: 오프셋 0(정확히 그 카드) / 1(다음 카드, 리프트 없이 정직하게) / 2(더블리프트, N+2)
+// - 아래에서 카운트: 리프트는 덱 위쪽 전용 기술이라 물리적으로 불가능하므로 오프셋 0 / 1(다음 카드)까지만 허용
+// 센터(크림프) 위치 목록. 26 = 원래 스택 26/27 사이.
+// 추가 센터를 잡으면 5장 이내로 해결되는 비율이 크게 올라간다.
+const BRIDGE_SETS = { 1: [26] };
+const BRIDGE_MARK = [''];
+function activeBridges(){ return BRIDGE_SETS[1]; }
+
+function computeOuts(pos, n, s){
+  s = s || 0;
+  const bridges = activeBridges();
+  // 컷의 출발점(앵커): 센터를 안 쓰면 현재 상태 s, 쓰면 그 센터의 절대 위치
+  const anchors = [{ from:s, bridge:false, mark:'' }]
+    .concat(bridges.map((b,i)=>({ from:b, bridge:true, mark:BRIDGE_MARK[i] })));
+  const dirs = [
+    { base:'top', name:'위에서 카운트', maxOffset:2 },
+    { base:'bottom', name:'아래에서 카운트', maxOffset:1 }
+  ];
+  const offsetTech = { 0:'정확히 그 카드', 1:'다음 카드', 2:'더블리프트' };
+  let candidates = [];
+  anchors.forEach(a=>{
+    dirs.forEach(m=>{
+      for(let o=0; o<=m.maxOffset; o++){
+        const neff = n + o;
+        if(neff > 52) continue; // 52장을 넘으면 물리적으로 불가능
+        // 목표 회전량 r: 이 상태가 되면 관객이 neff번째에서 타겟 카드를 만난다
+        const r = (m.base === 'top') ? mod52(pos - neff) : mod52(pos + neff - 53);
+        // 센터는 고정 크림프라 컷하면 "항상" 그 절대 회전 상태가 된다(현재 s와 무관).
+        const rFromNow = mod52(r - a.from);
+        const alt = 52 - rFromNow;
+        const cut = Math.min(rFromNow, alt);
+        const dir = rFromNow === 0 ? null : (rFromNow <= alt ? '위→아래' : '아래→위');
+        const bridgeName = a.bridge ? ('센터' + a.mark) : '';
+        const label = (a.bridge ? bridgeName + ' + ' : '') + m.name;
+        candidates.push({ label, bridge:a.bridge, bridgeName, offset:o, tech:offsetTech[o], cut, dir });
+      }
+    });
+  });
+  // 동일한 (방향+센터+컷량) 조합이면 더 단순한 기법(오프셋이 작은 것)만 남김
+  const seen = new Map();
+  candidates.forEach(c=>{
+    const key = c.label + '|' + c.cut + '|' + c.dir;
+    const prev = seen.get(key);
+    if(!prev || c.offset < prev.offset) seen.set(key, c);
+  });
+  const results = [...seen.values()];
+  // 실전 판정: 센터는 자연스러운 한 번의 컷이라 부담이 없지만,
+  // 그 외에 카드를 위/아래로 슬쩍 옮기는 건 5장 이내여야 티가 안 난다.
+  const MAX_QUIET_MOVE = 5;
+  results.forEach(o=>{ o.practical = o.cut <= MAX_QUIET_MOVE; });
+
+  // 정렬: 실전 가능한 것을 항상 먼저, 그 다음 설정된 우선순위
+  if(state.sortMode === 'simple'){
+    results.sort((a,b)=> (b.practical-a.practical) || a.offset - b.offset || a.cut - b.cut);
+  } else {
+    results.sort((a,b)=> (b.practical-a.practical) || a.cut - b.cut || a.offset - b.offset);
+  }
+  // 상위 5개가 '같은 방법에 컷만 늘어난' 목록이 되지 않도록,
+  // 먼저 방법별 최선을 하나씩 뽑고 남는 자리를 차선으로 채운다.
+  const bestPerMethod = [];
+  const usedLabels = new Set();
+  results.forEach(o=>{
+    if(!usedLabels.has(o.label)){ usedLabels.add(o.label); bestPerMethod.push(o); }
+  });
+  const rest = results.filter(o=> !bestPerMethod.includes(o));
+  const cmp = state.sortMode === 'simple'
+    ? (a,b)=> (b.practical-a.practical) || a.offset-b.offset || a.cut-b.cut
+    : (a,b)=> (b.practical-a.practical) || a.cut-b.cut || a.offset-b.offset;
+  bestPerMethod.sort(cmp);
+  return bestPerMethod.concat(rest).slice(0, 5);
+}
+
+// ================= 덱 모달 =================
+const deckModalOverlay = document.getElementById('deckModalOverlay');
+document.getElementById('gearBtn').onclick = ()=> deckModalOverlay.classList.add('show');
+document.getElementById('closeModalBtn').onclick = ()=> deckModalOverlay.classList.remove('show');
+deckModalOverlay.onclick = (e)=>{ if(e.target === deckModalOverlay) deckModalOverlay.classList.remove('show'); };
+
+function formatCardHtml(code){
+  const suit = code.slice(-1);
+  const rank = code.slice(0,-1);
+  const symbol = { H:'♥', S:'♠', D:'♦', C:'♣' }[suit];
+  const cls = (suit==='H' || suit==='D') ? 'red' : 'black';
+  return { rank, symbol, cls };
+}
+
+const stackViewOverlay = document.getElementById('stackViewOverlay');
+document.getElementById('closeStackViewBtn').onclick = ()=> stackViewOverlay.classList.remove('show');
+stackViewOverlay.onclick = (e)=>{ if(e.target === stackViewOverlay) stackViewOverlay.classList.remove('show'); };
+
+function openStackView(key){
+  const d = DECKS[key];
+  if(!d.cards) return;
+  document.getElementById('stackViewTitle').textContent = d.label;
+  const grid = document.getElementById('stackGrid');
+  grid.innerHTML = d.cards.map((c,i)=>{
+    const { rank, symbol, cls } = formatCardHtml(c);
+    return `<div class="stack-cell"><span class="idx">${i+1}</span><span class="cardv ${cls}">${rank}${symbol}</span></div>`;
+  }).join('');
+  stackViewOverlay.classList.add('show');
+}
+
+const deckScroll = document.getElementById('deckScroll');
+const deckPickerOverlay = document.getElementById('deckPickerOverlay');
+document.getElementById('closeDeckPickerBtn').onclick = ()=> deckPickerOverlay.classList.remove('show');
+deckPickerOverlay.onclick = (e)=>{ if(e.target === deckPickerOverlay) deckPickerOverlay.classList.remove('show'); };
+document.getElementById('deckCurrentRow').onclick = ()=>{
+  renderDeckList();
+  deckPickerOverlay.classList.add('show');
+};
+function renderDeckList(){
+  deckScroll.innerHTML = '';
+  Object.keys(DECKS).forEach(key=>{
+    const d = DECKS[key];
+    const isCustom = key === 'custom';
+    const noCards = isCustom && !d.cards;
+    const item = document.createElement('div');
+    item.className = 'deck-item' + (key===state.deckKey?' active':'');
+    item.innerHTML = `
+      <div class="deck-main">
+        <span class="deck-name">${d.label}</span>
+        <span class="deck-src">${noCards ? '눌러서 입력' : d.source}</span>
+      </div>
+      ${noCards ? '' : '<button class="view-btn">전체보기</button>'}
+    `;
+    const mainArea = item.querySelector('.deck-main');
+    mainArea.onclick = ()=>{
+      if(isCustom){
+        // 커스텀은 눌렀을 때만 입력란이 펼쳐진다
+        customOpen = !customOpen;
+        if(d.cards){ state.deckKey = key; persistDeckChoice(); }
+        renderDeckList();   // 목록은 열려 있는 동안 직접 다시 그린다
+        renderAll();
+        return;
+      }
+      state.deckKey = key; persistDeckChoice();
+      deckPickerOverlay.classList.remove('show'); renderAll();
+    };
+    const viewBtn = item.querySelector('.view-btn');
+    if(viewBtn) viewBtn.onclick = (e)=>{ e.stopPropagation(); openStackView(key); };
+    deckScroll.appendChild(item);
+
+    // 커스텀 항목 바로 아래에 입력란을 펼친다
+    if(isCustom && customOpen){
+      const box = document.createElement('div');
+      box.className = 'custom-inline';
+      box.innerHTML = `
+        <div class="custom-label">52장 · 공백/줄바꿈/쉼표 구분 · 10은 10 또는 T</div>
+        <textarea class="custom-input" id="customInput" placeholder="AH 2H 3H 4H 5H 6H 7H 8H 9H 10H JH QH KH ...">${d.cards ? d.cards.join(' ') : ''}</textarea>
+        <div class="custom-row">
+          <div class="custom-status" id="customStatus"></div>
+          <button class="custom-apply-btn" id="customApplyBtn">적용</button>
+        </div>
+      `;
+      deckScroll.appendChild(box);
+      box.querySelector('#customApplyBtn').onclick = applyCustomDeck;
+    }
+  });
+}
+
+function parseCustomInput(raw){
+  return raw.toUpperCase()
+    .replace(/♥/g,'H').replace(/♦/g,'D').replace(/♣/g,'C').replace(/♠/g,'S')
+    .split(/[\s,]+/).filter(Boolean)
+    .map(t => /^T[HSDC]$/.test(t) ? ('10'+t[1]) : t);
+}
+function validateDeck(cards){
+  if(cards.length !== 52) return { ok:false, msg:`52장이 아니라 ${cards.length}장 입력됨` };
+  const pattern = /^(10|[2-9]|[AJQK])[HSDC]$/;
+  const bad = cards.filter(c=>!pattern.test(c));
+  if(bad.length) return { ok:false, msg:`인식 불가: ${bad.slice(0,4).join(', ')}` };
+  if(new Set(cards).size !== 52) return { ok:false, msg:'중복/누락된 카드 있음' };
+  return { ok:true };
+}
+// 커스텀 입력은 덱 리스트 맨 아래 '커스텀' 항목을 눌렀을 때만 펼쳐진다
+let customOpen = false;
+function applyCustomDeck(){
+  const ta = document.getElementById('customInput');
+  const st = document.getElementById('customStatus');
+  if(!ta || !st) return;
+  const cards = parseCustomInput(ta.value);
+  const check = validateDeck(cards);
+  if(!check.ok){ st.textContent = check.msg; st.className='custom-status error'; return; }
+  DECKS.custom.cards = cards;
+  state.deckKey = 'custom';
+  persistDeckChoice();
+  customOpen = false;   // 적용 후에는 목록을 깔끔하게 접는다
+  st.textContent = '적용됨';
+  st.className = 'custom-status ok';
+  renderAll();
+  setTimeout(()=> deckPickerOverlay.classList.remove('show'), 400);
+}
+
+// ================= 새 카드 (모든 초기화는 이 한 곳을 지난다) =================
+// 예전에는 초기화 코드가 6곳에 흩어져 있어 두 번째 카드(rank2/suit2)가 남고,
+// 스냅샷도 안 잡혀 '되돌리기'가 뜨지 않았다.
+function resetTrick(){
+  takeSnapshot();
+  state.rank = null; state.suit = null;
+  state.rank2 = null; state.suit2 = null;
+  state.bottomRank = null; state.bottomSuit = null;
+  state.numBuffer = ''; state.spectatorNum = null;
+  state.noteLines = []; state.altIndex = 0; state.notesHidden = false;
+  state.mode = startMode();
+  renderAll();
+}
+
+document.getElementById('newCardBtn').onclick = ()=>{
+  if(isNotesSkin() && notesSubmitFn){ notesSubmitFn(); return; }
+  resetTrick();
+};
+
+// 노트 스킨 전용: 뒤로가기 셰브런이 새 카드로 리셋
+document.querySelector('.notes-back-chevron').onclick = ()=>{
+  if(!isNotesSkin()) return;
+  resetTrick();
+};
+
+// ================= 화면 테마 (시스템 / 라이트 / 다크) =================
+// 구형 WebView에는 matchMedia가 없을 수 있다. 없으면 조용히 다크로 간다
+// (예외가 나면 스크립트 전체가 죽어 앱이 백지가 된다)
+const themeMQ = (typeof window.matchMedia === 'function')
+  ? window.matchMedia('(prefers-color-scheme: light)')
+  : { matches:false, addEventListener(){}, addListener(){} };
+function applyTheme(){
+  const t = state.theme === 'system' ? (themeMQ.matches ? 'light' : 'dark') : state.theme;
+  document.documentElement.dataset.theme = t;
+}
+if(themeMQ.addEventListener) themeMQ.addEventListener('change', ()=>{ if(state.theme === 'system') applyTheme(); });
+else if(themeMQ.addListener) themeMQ.addListener(()=>{ if(state.theme === 'system') applyTheme(); });
+
+
+// ================= 스택 암기 훈련 =================
+// 이 도구의 최종 목표는 "안 쓰게 되는 것". 위치를 외우면 폰은 백업으로만 남는다.
+const trainState = { dir:'card2pos', q:null, shown:false, t0:0, ok:0, total:0, sumMs:0 };
+
+const trainOverlay = document.getElementById('trainOverlay');
+document.getElementById('closeTrainBtn').onclick = ()=> trainOverlay.classList.remove('show');
+trainOverlay.onclick = (e)=>{ if(e.target === trainOverlay) trainOverlay.classList.remove('show'); };
+document.getElementById('openTrainBtn').onclick = ()=>{
+  deckModalOverlay.classList.remove('show');
+  newTrainQuestion();
+  trainOverlay.classList.add('show');
+};
+
+function newTrainQuestion(){
+  const cards = DECKS[state.deckKey].cards;
+  if(!cards) return;
+  const i = Math.floor(Math.random()*52);
+  trainState.q = { pos:i+1, code:cards[i] };
+  trainState.shown = false;
+  trainState.t0 = Date.now();
+  renderTrain();
+}
+
+function trainAnswer(correct){
+  trainState.total++;
+  if(correct) trainState.ok++;
+  trainState.sumMs += (Date.now() - trainState.t0);
+  newTrainQuestion();
+}
+
+function renderTrain(){
+  // 방향 선택 세그먼트
+  const seg = document.getElementById('trainDirSeg');
+  if(seg){
+    seg.innerHTML = '';
+    [['card2pos','카드 → 위치'],['pos2card','위치 → 카드']].forEach(([v,l])=>{
+      const b=document.createElement('button');
+      b.className = trainState.dir===v ? 'active':'';
+      b.textContent = l;
+      b.onclick = ()=>{ trainState.dir = v; newTrainQuestion(); };
+      seg.appendChild(b);
+    });
+  }
+  const body = document.getElementById('trainBody');
+  if(!body || !trainState.q) return;
+  const { pos, code } = trainState.q;
+  const suit = code.slice(-1), rank = code.slice(0,-1);
+  const sym = { H:'♥', S:'♠', D:'♦', C:'♣' }[suit];
+  const col = (suit==='H'||suit==='D') ? 'red' : 'black';
+
+  const question = trainState.dir === 'card2pos'
+    ? `<div class="train-q ${col}">${rank}${sym}</div><div class="train-ask">위치는?</div>`
+    : `<div class="train-q">${pos}</div><div class="train-ask">어떤 카드?</div>`;
+
+  const answer = trainState.dir === 'card2pos'
+    ? `<div class="train-a">${pos}<span class="train-sub">위 ${pos} · 아래 ${53-pos} · 센터 ${shiftPosition(pos,26)}</span></div>`
+    : `<div class="train-a ${col}">${rank}${sym}</div>`;
+
+  const acc = trainState.total ? Math.round(trainState.ok/trainState.total*100) : 0;
+  const avg = trainState.total ? (trainState.sumMs/trainState.total/1000).toFixed(1) : '0.0';
+
+  body.innerHTML = `
+    <div class="train-card">
+      ${question}
+      ${trainState.shown ? answer : ''}
+    </div>
+    ${trainState.shown
+      ? `<div class="train-btns">
+           <button class="done-btn" id="trainNo">틀림</button>
+           <button class="done-btn primary" id="trainYes">맞음</button>
+         </div>`
+      : `<div class="train-btns"><button class="done-btn primary" id="trainShow" style="flex:1;">정답 보기</button></div>`}
+    <div class="train-stat">${trainState.total}문 · 정답률 ${acc}% · 평균 ${avg}초</div>
+  `;
+  if(trainState.shown){
+    document.getElementById('trainYes').onclick = ()=> trainAnswer(true);
+    document.getElementById('trainNo').onclick  = ()=> trainAnswer(false);
+  } else {
+    document.getElementById('trainShow').onclick = ()=>{ trainState.shown = true; renderTrain(); };
+  }
+}
+
+// ================= 공유 (실제 메모 앱 등으로 내보내기) =================
+// 웹페이지가 메모 앱에 직접 쓸 수는 없어서 iOS 공유 시트를 거친다.
+// 시트에서 '메모'를 고르면 카드/숫자가 그대로 저장된다.
+const notesShareBtn = document.getElementById('notesShareBtn');
+if(notesShareBtn){
+  notesShareBtn.onclick = async ()=>{
+    const lines = state.noteLines.length ? state.noteLines.slice() : [];
+    if(state.rank && state.suit && !lines.length){
+      lines.push(state.rank + SUITS.find(x=>x.code===state.suit).symbol);
+    }
+    if(state.spectatorNum && !lines.includes(String(state.spectatorNum))){
+      lines.push(String(state.spectatorNum));
+    }
+    const text = lines.join('\n');
+    if(!text) return;
+    try{
+      if(navigator.share){ await navigator.share({ text }); }
+      else if(navigator.clipboard){ await navigator.clipboard.writeText(text); }
+    }catch(e){ /* 사용자가 취소한 경우 등은 무시 */ }
+  };
+}
+
+
+// ================= 더블 버글라스 =================
+// 정통 방식: 덱을 한 번만 맞춰두고 한 장은 위에서, 다른 한 장은 앞면에서 같은 숫자로 센다.
+// 이 조건은 (현재위치A + 현재위치B == 53)일 때만 성립하므로, 유도할 숫자가 사실상 정해진다.
+function rotationAfter(o, rot){
+  const base = o.bridge ? 26 : rot;
+  if(!o.cut) return base;
+  return mod52(o.dir === '위→아래' ? base + o.cut : base - o.cut);
+}
+
+// ================= 계산기 기록 패널 (입력값 확인 + 아웃 선택) =================
+const calcHistOverlay = document.getElementById('calcHistOverlay');
+document.getElementById('closeCalcHistBtn').onclick = ()=> calcHistOverlay.classList.remove('show');
+calcHistOverlay.onclick = (e)=>{ if(e.target === calcHistOverlay) calcHistOverlay.classList.remove('show'); };
+
+function openCalcHistory(){
+  const body = document.getElementById('calcHistBody');
+  const sym = c => c ? SUITS.find(s=>s.code===c).symbol : '';
+  const cardTxt = (state.rank && state.suit)
+    ? `<b class="${SUITS.find(s=>s.code===state.suit).color}">${state.rank}${sym(state.suit)}</b>` : '<span class="hist-empty">미입력</span>';
+  const botTxt = (state.bottomRank && state.bottomSuit)
+    ? `<b class="${SUITS.find(s=>s.code===state.bottomSuit).color}">${state.bottomRank}${sym(state.bottomSuit)}</b>` : '<span class="hist-empty">미입력 (새 스택 가정)</span>';
+  const numTxt = state.spectatorNum ? `<b>${state.spectatorNum}</b>`
+    : (state.numBuffer ? `<b>${state.numBuffer}</b><span class="hist-empty"> (입력 중)</span>` : '<span class="hist-empty">미입력</span>');
+
+  let html = `
+    <div class="hist-row"><span>타겟 카드</span><span>${cardTxt}</span></div>
+    <div class="hist-row"><span>바텀 카드</span><span>${botTxt}</span></div>
+    <div class="hist-row"><span>관객 숫자</span><span>${numTxt}</span></div>
+    <div class="hist-row"><span>스택</span><span>${DECKS[state.deckKey].label}</span></div>
+    <div class="hist-actions">
+      <button class="hist-act" id="histEditBottom">바텀카드 다시</button>
+      <button class="hist-act" id="histEditCard">처음부터</button>
+    </div>`;
+
+  if(state.rank && state.suit){
+    const pos = getPosition(state.deckKey, state.rank, state.suit);
+    const rot = getRotation();
+    const curP = shiftPosition(pos, rot);
+    html += `<div class="hist-row"><span>현재 위치</span><span><b>${curP}</b>번${rot ? ` · ${rot}장 컷됨` : ''}</span></div>`;
+
+    // 아직 숫자를 안 받았다면: 숫자 불필요 여부 + 유도할 숫자/멘트를 여기서 확인
+    if(!state.spectatorNum){
+      const ir = instantReveal(pos, rot);
+      if(ir){
+        html += `<div class="hist-sub">숫자 불필요</div>
+          <div class="hist-instant">${ir}</div>`;
+      }
+      html += `<div class="hist-sub">숫자 유도</div>`;
+      guideNumbers(pos, rot).slice(0,3).forEach((g,i)=>{
+        const pt = patterFor(g.n);
+        html += `<div class="hist-guide${i===0?' sel':''}">
+          <div><b>${g.n}</b> <span class="hg-how">${g.how}</span></div>
+          <div class="hg-line">${pt.line}</div>
+          <div class="hg-note">${pt.note}</div>
+        </div>`;
+      });
+    }
+
+    if(state.spectatorNum){
+      const outs = computeOuts(pos, state.spectatorNum, rot);
+      html += `<div class="hist-sub">아웃 선택</div>`;
+      outs.forEach((o,i)=>{
+        const arrow = o.cut===0 ? '' : (o.dir==='위→아래' ? '↓' : '↑');
+        const cut = o.cut===0 ? (o.bridge?'센터 컷만':'이동 없음') : `${o.bridge?'센터 + ':''}${o.cut}장 ${arrow}`;
+        const method = (o.label.includes('위에서')?'위에서':'아래에서') + ' 카운트'
+          + (o.tech!=='정확히 그 카드' ? ' · '+o.tech : '');
+        html += `<div class="hist-out${i===state.altIndex?' sel':''}" data-i="${i}">
+          <span class="ho-cut">${cut}${o.practical?'':' ⚠'}</span>
+          <span class="ho-method">${method}</span></div>`;
+      });
+    }
+  }
+  body.innerHTML = html;
+  const eb = document.getElementById('histEditBottom');
+  if(eb) eb.onclick = ()=>{ calcHistOverlay.classList.remove('show'); goToBottomStep(); };
+  const ec = document.getElementById('histEditCard');
+  if(ec) ec.onclick = ()=>{ calcHistOverlay.classList.remove('show'); resetTrick(); };
+  body.querySelectorAll('.hist-out').forEach(el=>{
+    el.onclick = ()=>{
+      state.altIndex = parseInt(el.dataset.i,10);
+      calcHistOverlay.classList.remove('show');
+      renderAll();
+    };
+  });
+  calcHistOverlay.classList.add('show');
+}
+
+// 입력 순서 설정에 따른 시작 단계
+function startMode(){ return state.inputOrder === 'number' ? 'number' : 'card'; }
+
+// ================= 오프라인 캐시 (호스팅된 URL로 열었을 때만 동작) =================
+// file:// 로 열면 브라우저가 허용하지 않으므로 조용히 넘어간다.
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+
+// ================= 화면 꺼짐 방지 (연출 중 화면이 꺼지면 치명적) =================
+let wakeLockRef = null;
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){ wakeLockRef = await navigator.wakeLock.request('screen'); }
+  }catch(e){ /* 미지원 브라우저는 조용히 무시 */ }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') requestWakeLock();
+});
+document.addEventListener('click', function onceHandler(){
+  requestWakeLock();
+  document.removeEventListener('click', onceHandler);
+});
+
+// ================= 카드 완료 처리 =================
+function tryCompleteCard(){
+  if(state.rank && state.suit){
+    // 바텀 단계를 안 쓰면 곧바로 숫자 단계로 (연출 중 탭 수를 줄이는 게 최우선)
+    if(!state.useBottomStep){
+      state.mode = 'number';
+      state.bottomRank = null; state.bottomSuit = null;
+      if(state.inputOrder === 'card'){ state.numBuffer=''; state.spectatorNum=null; }
+      renderAll();
+      return;
+    }
+    state.mode = 'bottom';
+    state.bottomRank = null; state.bottomSuit = null;
+    // 숫자 먼저 모드에서는 이미 받아둔 관객 숫자를 유지해야 함
+    if(state.inputOrder === 'card'){
+      state.numBuffer = '';
+      state.spectatorNum = null;
+    }
+  }
+  renderAll();
+}
+
+// ================= 바텀카드 입력 처리 =================
+// 바텀 단계가 끝나면 항상 number 단계로 간다.
+// - 카드 먼저 모드: 아직 숫자가 없으므로 숫자 입력 화면
+// - 숫자 먼저 모드: 숫자가 이미 있으므로 곧바로 결과 화면
+function tryCompleteBottom(){
+  if(state.bottomRank && state.bottomSuit){
+    state.mode = 'number';
+    if(state.inputOrder === 'card'){ state.numBuffer = ''; state.spectatorNum = null; }
+  }
+  renderAll();
+}
+function skipBottom(){
+  state.bottomRank = null; state.bottomSuit = null;
+  state.mode = 'number';
+  if(state.inputOrder === 'card'){ state.numBuffer = ''; state.spectatorNum = null; }
+  renderAll();
+}
+function goToBottomStep(){
+  state.mode = 'bottom';
+  if(state.inputOrder === 'card'){ state.numBuffer = ''; state.spectatorNum = null; }
+  renderAll();
+}
+// 숫자 먼저 모드에서 숫자를 확정했을 때: 아직 카드가 없으면 카드 입력으로 보냄
+function afterNumberConfirmed(){
+  state.altIndex = 0;
+  if(state.inputOrder === 'number' && !(state.rank && state.suit)){
+    state.mode = 'card';
+  }
+  renderAll();
+}
+
+// ================= 메모 스킨 (텍스트 입력 방식) =================
+
+// 실제 iOS 메모 서식 툴바 아이콘 (스크린샷 확대해서 모양 그대로 재현)
+const NOTE_ICONS = {
+  // 체크리스트: 위=흰 원에 체크가 파인 형태, 아래=링. 오른쪽에 가는 선 2개
+  checklist: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+    <circle cx="6" cy="7.4" r="4.2" fill="currentColor"/>
+    <path d="M4.3 7.5l1.4 1.4 2.4-2.7" stroke="#0D0D0D" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="6" cy="17.2" r="3.5" stroke="currentColor" stroke-width="2.1"/>
+    <line x1="12.8" y1="7.4" x2="22" y2="7.4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="12.8" y1="17.2" x2="22" y2="17.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>`,
+  // 표: 둥근 사각형 + 가로 2줄, 세로 1줄 (3행 2열)
+  table: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+    <rect x="3" y="5.4" width="18" height="13.2" rx="3"/>
+    <line x1="3" y1="9.8" x2="21" y2="9.8"/>
+    <line x1="3" y1="14.2" x2="21" y2="14.2"/>
+    <line x1="12" y1="5.4" x2="12" y2="18.6"/>
+  </svg>`,
+  // 클립: 45도로 누운 이중 곡선
+  clip: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18.8 8.6L9 18.4a4.1 4.1 0 0 1-5.8-5.8L13.5 2.3a2.8 2.8 0 0 1 3.9 3.9L7.6 16a1.4 1.4 0 0 1-1.9-1.9l8.7-8.7"/>
+  </svg>`,
+  // 마크업: 원 안의 가는 펜촉 (아래쪽만 채워짐)
+  markup: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+    <circle cx="12" cy="12" r="8.7" stroke="currentColor" stroke-width="2"/>
+    <path d="M12 8.2l1.9 10.9a8.7 8.7 0 0 1-3.8 0z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+    <path d="M10.85 15.4h2.3l0.75 3.7a8.7 8.7 0 0 1-3.8 0z" fill="currentColor"/>
+  </svg>`,
+  // 글쓰기 도구: 5겹으로 엮인 매듭 안쪽에 작은 연필이 겹쳐 지나간다
+  ai: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+    <path d="M20.3,12.2 20.3,12.0 20.2,11.8 20.0,11.7 19.8,11.5 19.6,11.4 19.3,11.4 18.9,11.3 18.6,11.3 18.2,11.4 17.7,11.5 17.3,11.6 16.8,11.8 16.4,12.0 15.9,12.3 15.5,12.7 15.1,13.0 14.7,13.5 14.3,13.9 14.0,14.4 13.8,14.9 13.5,15.4 13.3,15.9 13.2,16.4 13.1,16.9 13.1,17.4 13.1,17.9 13.1,18.3 13.2,18.7 13.3,19.1 13.4,19.4 13.6,19.6 13.8,19.9 14.0,20.0 14.2,20.1 14.4,20.1 14.6,20.1 14.7,20.0 14.9,19.9 15.0,19.7 15.0,19.5 15.1,19.2 15.1,18.9 15.0,18.5 14.9,18.2 14.7,17.8 14.5,17.4 14.2,17.0 13.9,16.7 13.5,16.3 13.1,16.0 12.6,15.7 12.2,15.4 11.6,15.2 11.1,15.0 10.6,14.8 10.0,14.7 9.4,14.6 8.9,14.6 8.4,14.6 7.9,14.7 7.4,14.8 6.9,15.0 6.5,15.1 6.2,15.3 5.9,15.6 5.6,15.8 5.4,16.0 5.3,16.3 5.2,16.5 5.2,16.7 5.2,16.9 5.3,17.1 5.4,17.2 5.6,17.3 5.8,17.3 6.0,17.3 6.3,17.3 6.6,17.2 6.9,17.0 7.2,16.8 7.5,16.5 7.8,16.2 8.1,15.8 8.3,15.4 8.6,14.9 8.7,14.4 8.9,13.9 9.0,13.3 9.1,12.8 9.1,12.2 9.1,11.6 9.0,11.1 8.9,10.5 8.7,10.0 8.6,9.5 8.3,9.0 8.1,8.6 7.8,8.2 7.5,7.9 7.2,7.6 6.9,7.4 6.6,7.2 6.3,7.1 6.0,7.1 5.8,7.1 5.6,7.1 5.4,7.2 5.3,7.3 5.2,7.5 5.2,7.7 5.2,7.9 5.3,8.1 5.4,8.4 5.6,8.6 5.9,8.8 6.2,9.1 6.5,9.3 6.9,9.4 7.4,9.6 7.8,9.7 8.4,9.8 8.9,9.8 9.4,9.8 10.0,9.7 10.6,9.6 11.1,9.4 11.6,9.2 12.2,9.0 12.6,8.7 13.1,8.4 13.5,8.1 13.9,7.7 14.2,7.4 14.5,7.0 14.7,6.6 14.9,6.2 15.0,5.9 15.1,5.5 15.1,5.2 15.0,4.9 15.0,4.7 14.9,4.5 14.7,4.4 14.6,4.3 14.4,4.3 14.2,4.3 14.0,4.4 13.8,4.5 13.6,4.8 13.4,5.0 13.3,5.3 13.2,5.7 13.1,6.1 13.1,6.5 13.1,7.0 13.1,7.5 13.2,8.0 13.3,8.5 13.5,9.0 13.8,9.5 14.0,10.0 14.3,10.5 14.7,10.9 15.1,11.4 15.5,11.7 15.9,12.1 16.4,12.4 16.8,12.6 17.3,12.8 17.7,12.9 18.2,13.0 18.6,13.1 18.9,13.1 19.3,13.0 19.6,13.0 19.8,12.9 20.0,12.7 20.2,12.6 20.3,12.4 20.3,12.2Z" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+    <path d="M10.2 14.6L16.6 8.2" stroke="var(--nf-bg,#181818)" stroke-width="3.8" stroke-linecap="round"/>
+    <path d="M9.6 15.2l0.8-2.1 5.6-5.6 1.3 1.3-5.6 5.6z" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+    <path d="M15.9 6.9l1.1-1.1 1.3 1.3-1.1 1.1z" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+  </svg>`
+};
+
+// 실제 메모앱 상단에 뜨는 날짜 형식: 2026년 8월 16일 오전 12:19
+function notesDateText(){
+  const d = new Date();
+  const h = d.getHours();
+  const ampm = h < 12 ? '오전' : '오후';
+  let h12 = h % 12; if(h12 === 0) h12 = 12;
+  return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${ampm} ${h12}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function isNotesSkin(){ return document.body.dataset.skin === 'ios-notes'; }
+function isSamsungSkin(){ return document.body.dataset.skin === 'android-calc'; }
+function isCalcSkin(){
+  const sk = document.body.dataset.skin;
+  return sk === 'ios-calc' || sk === 'android-calc';
+}
+
+// 연산자 버튼 = 수트 매핑 (그리드에서 위→아래 순서, 하클다스와 동일)
+const OP_SUIT_MAP = { '÷':'H', '×':'C', '−':'D', '+':'S' };
+const RANK_BY_NUM = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+// 실제 계산기 앱과 동일한 배열(⌫AC%÷ / 789× / 456− / 123+ / ±0.=)을
+// kind: 'card'(타겟 카드 입력) / 'bottom'(바텀카드 입력, 스킵 가능) / 'number'(관객 숫자 입력) 공용으로 렌더링.
+// card/bottom 모드에서는 숫자로 랭크(1~13=A~K)를 입력한 뒤 연산자(÷×−+)를 눌러 수트를 확정 + 완료.
+// 계산기 스킨 디스플레이: 관객 숫자가 확정되면 추천 컷을 "계산 결과"처럼 크게 보여줌
+// (연출 중에는 이 한 줄만 보면 되도록 - 위장과 실용성을 동시에)
+function calcDisplayHtml(kind){
+  if(kind === 'number' && state.spectatorNum && state.rank && state.suit){
+    const pos = getPosition(state.deckKey, state.rank, state.suit);
+    const rot = getRotation();
+    const outs = computeOuts(pos, state.spectatorNum, rot);
+    const idx = Math.min(state.altIndex, outs.length - 1);
+    const best = outs[idx];
+    const dirShort = best.cut === 0 ? '' : (best.dir === '위→아래' ? '↓' : '↑');
+    const big = best.cut === 0 ? '0' : `${dirShort}${best.cut}`;
+    const parts = [];
+    if(best.bridge) parts.push(best.bridgeName);
+    parts.push(best.label.includes('위에서') ? '위에서 카운트' : '아래에서 카운트');
+    if(best.offset === 1) parts.push('다음 카드');
+    if(best.offset === 2) parts.push('더블리프트');
+    const counter = outs.length > 1 ? ` <span style="opacity:0.45;">${idx+1}/${outs.length}</span>` : '';
+    if(!best.practical) parts.push('⚠');
+    return `<div class="calc-answer-sub">${parts.join(' · ')}${counter}</div>
+      <div class="keypad-display">${big}</div>`;
+  }
+  return `<div class="keypad-display ${state.numBuffer ? '' : 'placeholder-txt'}">${state.numBuffer || '0'}</div>`;
+}
+
+function renderCalcKeypadDock(kind){
+  const isCardLike = (kind === 'card' || kind === 'bottom');
+  const topRight = kind === 'number'
+
+    ? `<button id="backToBottomBtn" style="margin-right:10px;">바텀카드 변경</button><button id="backToCardBtn">카드 변경</button>`
+    : (kind === 'bottom' ? `<button id="skipBottomBtn">스킵</button>` : '');
+  const label = kind === 'card' ? '카드 입력 (숫자=랭크, ÷♥ ×♣ −♦ +♠)'
+              : kind === 'bottom' ? '현재 바텀 카드 (숫자=랭크, ÷♥ ×♣ −♦ +♠)'
+              : '관객 숫자 입력';
+
+  dock.innerHTML = `
+    <div class="dock-label"><span>${label}</span><span>${topRight}</span></div>
+    <div class="calc-toprow">
+      <div class="calc-icon-btn" id="calcAltBtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg></div>
+      ${isCardLike ? `<div class="calc-suit-hint">
+        <span>÷<b class="red">♥</b></span><span>×<b>♣</b></span><span>−<b class="red">♦</b></span><span>+<b>♠</b></span>
+      </div>` : '<span></span>'}
+      <div class="calc-icon-btn" id="calcSettingsBtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><line x1="8" y1="7" x2="16" y2="7"/><circle cx="8" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="16" r="0.9" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="0.9" fill="currentColor" stroke="none"/></svg></div>
+    </div>
+    ${calcDisplayHtml(kind)}
+    ${isSamsungSkin() ? '<div class="sam-backspace-row"><button class="sam-backspace" id="samBackspace"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5H9L3 12l6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><line x1="12" y1="9.5" x2="17" y2="14.5"/><line x1="17" y1="9.5" x2="12" y2="14.5"/></svg></button></div>' : ''}
+    <div class="calc-grid" id="calcGrid"></div>
+  `;
+
+  // 계산기 스킨은 상단바가 숨겨져 있으므로 계산기 자체 아이콘에 기능을 연결
+  document.getElementById('calcSettingsBtn').onclick = ()=> deckModalOverlay.classList.add('show');
+  document.getElementById('calcAltBtn').onclick = ()=> openCalcHistory();
+  const samBs = document.getElementById('samBackspace');
+  if(samBs) samBs.onclick = ()=>{
+    state.numBuffer = state.numBuffer.slice(0,-1);
+    if(kind === 'number'){ liveNumber(); } else { state.spectatorNum = null; renderAll(); }
+  };
+
+  if(kind === 'number'){
+    document.getElementById('backToCardBtn').onclick = resetTrick;
+    document.getElementById('backToBottomBtn').onclick = goToBottomStep;
+  }
+  if(kind === 'bottom'){
+    document.getElementById('skipBottomBtn').onclick = skipBottom;
+  }
+
+  const pmIcon = '<svg class="pm-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="23.5" y1="5.5" x2="8.5" y2="26.5"/><line x1="4" y1="10.5" x2="12.5" y2="10.5"/><line x1="8.25" y1="6.25" x2="8.25" y2="14.75"/><line x1="19.5" y1="21.5" x2="28" y2="21.5"/></svg>';
+  const eqRole = kind==='number' ? 'confirmNumber' : (kind==='bottom' ? 'skipIfEmpty' : 'deco');
+  const suitRole = isCardLike ? 'suit' : 'deco';
+
+  // 삼성(One UI) 계산기: 1행이 C · ( ) · % · ÷ 이고, 지우기(⌫)는 디스플레이 우측에 따로 있다
+  const layoutSamsung = [
+    { label:'C',   type:'clear',  role:'clear' },
+    { label:'( )', type:'func',   role:'deco' },
+    { label:'%',   type:'func',   role:'deco' },
+    { label:'÷',   type:'op',     role: suitRole },
+    { label:'7',   type:'digit',  role:'digit' },
+    { label:'8',   type:'digit',  role:'digit' },
+    { label:'9',   type:'digit',  role:'digit' },
+    { label:'×',   type:'op',     role: suitRole },
+    { label:'4',   type:'digit',  role:'digit' },
+    { label:'5',   type:'digit',  role:'digit' },
+    { label:'6',   type:'digit',  role:'digit' },
+    { label:'−',   type:'op',     role: suitRole },
+    { label:'1',   type:'digit',  role:'digit' },
+    { label:'2',   type:'digit',  role:'digit' },
+    { label:'3',   type:'digit',  role:'digit' },
+    { label:'+',   type:'op',     role: suitRole },
+    { label:pmIcon, type:'digit', role:'deco', isHtml:true },
+    { label:'0',   type:'digit',  role:'digit' },
+    { label:'.',   type:'digit',  role:'deco' },
+    { label:'=',   type:'equals', role: eqRole }
+  ];
+
+  const layoutIOS = [
+    { label:'⌫',   type:'func',   role:'backspace' },
+    { label:'AC',  type:'func',   role:'clear' },
+    { label:'%',   type:'func',   role:'deco' },
+    { label:'÷',   type:'op',     role: suitRole },
+    { label:'7',   type:'digit',  role:'digit' },
+    { label:'8',   type:'digit',  role:'digit' },
+    { label:'9',   type:'digit',  role:'digit' },
+    { label:'×',   type:'op',     role: suitRole },
+    { label:'4',   type:'digit',  role:'digit' },
+    { label:'5',   type:'digit',  role:'digit' },
+    { label:'6',   type:'digit',  role:'digit' },
+    { label:'−',   type:'op',     role: suitRole },
+    { label:'1',   type:'digit',  role:'digit' },
+    { label:'2',   type:'digit',  role:'digit' },
+    { label:'3',   type:'digit',  role:'digit' },
+    { label:'+',   type:'op',     role: suitRole },
+    { label:pmIcon, type:'digit', role:'deco', isHtml:true },
+    { label:'0',   type:'digit',  role:'digit' },
+    { label:'.',   type:'digit',  role:'deco' },
+    { label:'=',   type:'equals', role: eqRole }
+  ];
+
+  const layout = isSamsungSkin() ? layoutSamsung : layoutIOS;
+
+  function shake(el){ el.classList.add('shake'); setTimeout(()=>el.classList.remove('shake'),300); }
+
+  const grid = document.getElementById('calcGrid');
+  layout.forEach(item=>{
+    const btn = document.createElement('button');
+    btn.className = 'calc-btn ' + item.type;
+    btn.innerHTML = `<span class="calc-main">${item.label}</span>`;
+    btn.onclick = ()=>{
+      if(item.role === 'digit'){
+        if(state.numBuffer.length < 2) state.numBuffer += item.label;
+        if(kind === 'number'){ liveNumber(); }   // 즉시 결과 반영
+        else { state.spectatorNum = null; renderAll(); }
+      } else if(item.role === 'clear'){
+        // 결과가 떠 있을 때 AC = 새 카드부터 완전히 다시 (All Clear)
+        if(kind === 'number' && state.spectatorNum){
+          resetTrick(); return;
+        }
+        state.numBuffer = ''; state.spectatorNum = null;
+        renderAll();
+      } else if(item.role === 'backspace'){
+        state.numBuffer = state.numBuffer.slice(0,-1);
+        if(kind === 'number'){ liveNumber(); }
+        else { state.spectatorNum = null; renderAll(); }
+      } else if(item.role === 'confirmNumber'){
+        const n = parseInt(state.numBuffer, 10);
+        if(n >= 1 && n <= 52){ state.spectatorNum = n; afterNumberConfirmed(); }
+        else shake(btn);
+      } else if(item.role === 'skipIfEmpty'){
+        if(!state.numBuffer){ skipBottom(); }
+        else shake(btn);
+      } else if(item.role === 'suit'){
+        const rankNum = parseInt(state.numBuffer, 10);
+        if(rankNum >= 1 && rankNum <= 13){
+          const rank = RANK_BY_NUM[rankNum-1];
+          const suit = OP_SUIT_MAP[item.label];
+          if(kind === 'card'){
+            state.rank = rank; state.suit = suit;
+            tryCompleteCard();
+          } else {
+            state.bottomRank = rank; state.bottomSuit = suit;
+            tryCompleteBottom();
+          }
+        } else {
+          shake(btn);
+        }
+      }
+      // role 'deco'는 실제 앱처럼 보이기 위한 장식용 버튼이라 동작 없음
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function parseCardShorthand(text){
+  const t = text.trim().toUpperCase();
+  const m = t.match(/^(10|[2-9]|[AJQK])([HSDC])$/);
+  if(!m) return null;
+  return { rank:m[1], suit:m[2] };
+}
+
+// kind: 'card' | 'bottom' | 'number' — 노트 스킨에서 버튼 그리드 대신 쓰는 한 줄 텍스트 입력 dock
+function renderNotesInputDock(kind){
+  // 숫자 단계에서도 inputmode는 text로 둔다 — 실제 메모앱은 계속 같은 글자 키보드라
+  // 여기서 숫자 키패드로 바뀌면 위장이 깨진다.
+  // 숫자 단계에서는 '지금 스택 몇 번째인지'를 자리표시로 보여준다
+  // (그 숫자가 곧 위에서 세었을 때 컷 없이 맞는 숫자)
+  let numPh = '숫자';
+  if(state.rank && state.suit){
+    const posP = getPosition(state.deckKey, state.rank, state.suit);
+    if(posP) numPh = String(shiftPosition(posP, getRotation()));
+  }
+  const cfg = {
+    card:   { placeholder:'예: 7d, kc, 10h' },
+    bottom: { placeholder:'예: 7d · 모르면 비워두고 우측 상단 체크' },
+    number: { placeholder: numPh }
+  }[kind];
+
+  // 결과가 이미 표시된 상태면 stage는 renderNotesNumberStage가 그린 내용을 유지 (덮어쓰지 않음)
+  const resultShown = (kind === 'number' && state.spectatorNum && state.rank && state.suit);
+
+  if(!resultShown){
+    // 입력창은 노트 "본문"처럼 stage에 둠 - 이전에 입력한 줄들은 그대로 남고 새 줄이 이어짐
+    const linesHtml = state.noteLines.map((line, i)=>
+      `<div class="notes-line">${line}</div>`
+    ).join('');
+    // 실제 메모앱처럼: 새 노트(내용 없음)일 때만 상단 중앙에 날짜가 표시된다
+    const dateLine = state.noteLines.length === 0
+      ? `<div class="notes-date">${notesDateText()}</div>` : '';
+    // 숫자를 기다리는 중이면, 유도할 숫자를 '연한 글씨'로만 깔아둔다 (입력 안 된 자리처럼 보임)
+    let hintHtml = '';
+    if(kind === 'number' && state.rank && state.suit){
+      const posH = getPosition(state.deckKey, state.rank, state.suit);
+      if(posH){
+        const rotH = getRotation();
+        const curH = shiftPosition(posH, rotH);
+        // 기본 스킨과 같은 '다음 수' 제안을 연한 글씨로
+        nextMoves(posH, rotH).slice(0,3).forEach(m=>{
+          hintHtml += `<div class="notes-line notes-faint">${m.tag} · ${m.title}</div>`;
+        });
+      }
+    }
+    stage.innerHTML = `
+      ${dateLine}
+      <div class="notes-plain">
+        ${linesHtml}
+        <input type="text" id="notesInput" class="notes-body-input" placeholder="${cfg.placeholder}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text">
+        ${hintHtml}
+      </div>
+    `;
+  }
+
+  // dock: 입력 중이면 키보드 위 서식바, 결과 표시 중이면 키보드 내려간 상태의 툴바
+  if(resultShown){
+    dock.innerHTML = `
+      <div class="notes-rest-row">
+        <div class="notes-rest-pill">
+          <span class="notes-format-item">${NOTE_ICONS.checklist}</span>
+          <span class="notes-format-item">${NOTE_ICONS.clip}</span>
+          <span class="notes-format-item">${NOTE_ICONS.markup}</span>
+          <span class="notes-format-item">${NOTE_ICONS.ai}</span>
+        </div>
+        <div class="notes-compose" id="notesComposeBtn">
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12.8V18a2.6 2.6 0 0 1-2.6 2.6H6a2.6 2.6 0 0 1-2.6-2.6V7.1A2.6 2.6 0 0 1 6 4.5h5.2"/><path d="M16.4 3.6l3.9 3.9-6.6 6.6-4.4.5.5-4.4z"/></svg>
+        </div>
+      </div>
+    `;
+    // 새 메모 버튼 = 새 카드로 처음부터
+    document.getElementById('notesComposeBtn').onclick = resetTrick;
+  } else {
+  dock.innerHTML = `
+    <div class="notes-format-row">
+      <span class="notes-format-item nf-text">가가</span>
+      <span class="notes-format-item">${NOTE_ICONS.checklist}</span>
+      <span class="notes-format-item">${NOTE_ICONS.table}</span>
+      <span class="notes-format-item nf-clip">${NOTE_ICONS.clip}</span>
+      <span class="notes-format-item">${NOTE_ICONS.markup}</span>
+      <span class="notes-format-item nf-ai">${NOTE_ICONS.ai}</span>
+      <span class="notes-format-item nf-text nf-cut">E</span>
+    </div>
+  `;
+  }
+
+  // 되돌릴 게 있을 때만 undo 아이콘 노출 (편집 중 + 내용 존재)
+  function syncUndo(){
+    const inp = document.getElementById('notesInput');
+    const has = state.noteLines.length > 0 || (!!inp && inp.value.trim() !== '');
+    document.body.classList.toggle('can-undo', has);
+  }
+  syncUndo();
+
+  const input = document.getElementById('notesInput');
+  if(!input){
+    // 결과가 표시된 상태 - 입력창 없음. 상단 체크는 새 카드 시작으로 동작
+    notesSubmitFn = resetTrick;
+    return;
+  }
+  if(document.activeElement !== input){
+    input.focus();
+    // 커서를 맨 끝으로
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+  stage.scrollTop = stage.scrollHeight;
+
+  function submit(){
+    const val = input.value.trim();
+    if(kind === 'card'){
+      const parsed = parseCardShorthand(val);
+      if(!parsed){ input.classList.add('shake'); setTimeout(()=>input.classList.remove('shake'),300); return; }
+      state.rank = parsed.rank; state.suit = parsed.suit;
+      state.noteLines.push(val);
+      tryCompleteCard();
+    } else if(kind === 'bottom'){
+      if(!val){ skipBottom(); return; }
+      const parsed = parseCardShorthand(val);
+      if(!parsed){ input.classList.add('shake'); setTimeout(()=>input.classList.remove('shake'),300); return; }
+      state.bottomRank = parsed.rank; state.bottomSuit = parsed.suit;
+      state.noteLines.push(val);
+      tryCompleteBottom();
+    } else if(kind === 'number'){
+      // 메모에 자유롭게 적는 방식이라, 입력이 카드꼴이면 숫자가 아니라 카드로 알아서 받는다.
+      //  · 바텀카드가 아직 없으면 → 바텀카드로 인식하고 계속 숫자를 기다림
+      //  · 이미 있으면 → 더블 버글라스의 두 번째 카드로 인식
+      const asCard = parseCardShorthand(val);
+      if(asCard){
+        if(!(state.bottomRank && state.bottomSuit)){
+          state.bottomRank = asCard.rank; state.bottomSuit = asCard.suit;
+        } else {
+          state.rank2 = asCard.rank; state.suit2 = asCard.suit;
+        }
+        state.noteLines.push(val);
+        renderAll();
+        return;
+      }
+      const n = parseInt(val, 10);
+      if(!(n>=1 && n<=52)){ input.classList.add('shake'); setTimeout(()=>input.classList.remove('shake'),300); return; }
+      state.numBuffer = String(n);
+      state.spectatorNum = n;
+      state.noteLines.push(val);
+      afterNumberConfirmed();
+    }
+  }
+
+  notesSubmitFn = submit;
+  input.addEventListener('input', ()=>{
+    syncUndo();
+    if(kind === 'number'){
+      // 순수 숫자일 때만 즉시 반영 ('9c' 같은 카드 입력이 9로 해석되면 안 됨)
+      const v = input.value.trim();
+      if(/^\d{1,2}$/.test(v)){
+        const n = parseInt(v, 10);
+        if(n >= 1 && n <= 52){ state.numBuffer = String(n); state.spectatorNum = n; state.altIndex = 0; }
+      }
+    }
+  });
+  input.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') submit(); });
+}
+
+// ================= 렌더 =================
+const stage = document.getElementById('stage');
+const dock = document.getElementById('dock');
+
+function renderAll(){
+  // 노트 결과 화면에서 달아둔 탭 핸들러가 다른 화면에 남지 않도록 매번 비운다
+  stage.onclick = null;
+  const dcName = document.getElementById('dcName');
+  if(dcName) dcName.textContent = DECKS[state.deckKey].label;
+  renderSkinGrid();
+  renderOptions();
+  stage.classList.remove('is-result');
+  const notesResultShown = isNotesSkin() && state.spectatorNum && state.rank && state.suit;
+  const newCardBtnEl = document.getElementById('newCardBtn');
+  // 노란 체크는 실제 메모앱처럼 '편집 중'일 때만 보인다 (결과 화면에서는 숨김)
+  newCardBtnEl.style.display =
+    isNotesSkin() ? (notesResultShown ? 'none' : 'flex')
+                  : ((state.rank && state.suit) ? 'inline' : 'none');
+
+  if(state.mode === 'card2'){
+    renderNumberStage();
+    renderCard2Dock();
+  } else if(state.mode === 'number'){
+    renderNumberStage();
+    renderNumberDock();
+  } else if(state.mode === 'bottom' && state.rank && state.suit){
+    renderBottomStage();
+    renderBottomDock();
+  } else {
+    renderCardStage();
+    renderCardDock();
+  }
+}
+
+function renderCardStage(){
+  if(isNotesSkin()){
+    stage.innerHTML = `<div class="notes-plain"></div>`;
+    return;
+  }
+  stage.innerHTML = `
+    <div class="placeholder">
+      <div class="big-q">🂠</div>
+      <div>아래에서 카드를 선택하세요</div>
+      <div class="deck-name">${DECKS[state.deckKey].label} 사용 중</div>
+    </div>
+  `;
+}
+
+function renderCardDock(){
+  if(isNotesSkin()){ renderNotesInputDock('card'); return; }
+  if(isCalcSkin()){ renderCalcKeypadDock('card'); return; }
+  dock.innerHTML = `
+    <div class="dock-label">
+      <span>카드 입력</span>
+      ${lastSnapshot ? '<button id="undoResetBtn" class="undo-reset">되돌리기</button>' : ''}
+    </div>
+    <div class="rank-grid" id="rankGrid"></div>
+    <div class="suit-grid" id="suitGrid"></div>
+  `;
+  const undoBtn = document.getElementById('undoResetBtn');
+  if(undoBtn) undoBtn.onclick = restoreSnapshot;
+  const rankGrid = document.getElementById('rankGrid');
+  RANKS.forEach(r=>{
+    const btn = document.createElement('button');
+    btn.className = 'rank-btn' + (state.rank===r ? ' active':'');
+    btn.textContent = r;
+    btn.onclick = ()=>{ state.rank = r; tryCompleteCard(); };
+    rankGrid.appendChild(btn);
+  });
+  const suitGrid = document.getElementById('suitGrid');
+  SUITS.forEach(s=>{
+    const btn = document.createElement('button');
+    btn.className = 'suit-btn ' + s.color + (state.suit===s.code ? ' active':'');
+    // 랭크 미선택 상태에서는 앞에 작은 A를 띄워 '바로 누르면 에이스'임을 알린다
+    btn.innerHTML = (state.rank ? '' : '<span class="suit-a">A</span>') + s.symbol;
+    btn.onclick = ()=>{
+      if(!state.rank) state.rank = 'A';
+      state.suit = s.code;
+      tryCompleteCard();
+    };
+    suitGrid.appendChild(btn);
+  });
+}
+
+function renderBottomStage(){
+  const suitInfo = SUITS.find(s=>s.code===state.suit);
+  if(isNotesSkin()){
+    stage.innerHTML = `<div class="notes-plain">${state.rank}${suitInfo.symbol} 확인</div>`;
+    return;
+  }
+  stage.innerHTML = `
+    <div class="panel" style="padding:10px 14px;">
+      <div class="result-top" style="margin-bottom:0;">
+        <div class="picked-card ${suitInfo.color}" style="font-size:22px;">${state.rank}${suitInfo.symbol}</div>
+        <div class="deck-tag" style="text-align:left;">${DECKS[state.deckKey].label} · 타겟 카드</div>
+      </div>
+    </div>
+    <div class="placeholder" style="height:auto; padding:24px 0;">
+      <div class="big-q">🂠</div>
+      <div>덱을 한 번 컷한 상태라면,<br>지금 보이는 바텀 카드를 입력하세요</div>
+      <div class="deck-name">모르면 스킵 — 새 스택 그대로로 가정합니다</div>
+    </div>
+  `;
+}
+
+function renderBottomDock(){
+  if(isNotesSkin()){ renderNotesInputDock('bottom'); return; }
+  if(isCalcSkin()){ renderCalcKeypadDock('bottom'); return; }
+  dock.innerHTML = `
+    <div class="dock-label"><span>현재 바텀 카드 (선택)</span><button id="skipBottomBtn">스킵</button></div>
+    <div class="rank-grid" id="bottomRankGrid"></div>
+    <div class="suit-grid" id="bottomSuitGrid"></div>
+  `;
+  document.getElementById('skipBottomBtn').onclick = skipBottom;
+
+  const rankGrid = document.getElementById('bottomRankGrid');
+  RANKS.forEach(r=>{
+    const btn = document.createElement('button');
+    btn.className = 'rank-btn' + (state.bottomRank===r ? ' active':'');
+    btn.textContent = r;
+    btn.onclick = ()=>{ state.bottomRank = r; tryCompleteBottom(); };
+    rankGrid.appendChild(btn);
+  });
+  const suitGrid = document.getElementById('bottomSuitGrid');
+  SUITS.forEach(s=>{
+    const btn = document.createElement('button');
+    btn.className = 'suit-btn ' + s.color + (state.bottomSuit===s.code ? ' active':'');
+    btn.innerHTML = (state.bottomRank ? '' : '<span class="suit-a">A</span>') + s.symbol;
+    btn.onclick = ()=>{
+      if(!state.bottomRank) state.bottomRank = 'A';
+      state.bottomSuit = s.code;
+      tryCompleteBottom();
+    };
+    suitGrid.appendChild(btn);
+  });
+}
+
+// 노트 스킨: 계산 결과를 UI 카드가 아니라 그냥 타이핑한 메모처럼 문장으로 보여줌
+function renderNotesNumberStage(pos, suitInfo, rot, curPos){
+  // 실제 메모처럼 보이게: 입력한 줄만 흰 글씨로 남기고,
+  // 계산 결과는 '아직 입력 안 된 자리'처럼 연한 회색 한 줄로만 얹는다.
+  const linesOf = arr => arr.map(l => `<div class="notes-line">${l}</div>`).join('');
+
+  if(!state.spectatorNum){
+    stage.innerHTML = `<div class="notes-plain">${linesOf(state.noteLines)}</div>`;
+    stage.onclick = null;
+    return;
+  }
+
+  // 관객에게 화면을 보여줄 때는 카드와 숫자 두 줄만 남긴다.
+  // (바텀카드를 입력했더라도 그 줄은 숨긴다)
+  const shown = state.notesHidden && state.noteLines.length > 1
+    ? [state.noteLines[0], state.noteLines[state.noteLines.length - 1]]
+    : state.noteLines;
+
+  let faint = '';
+  if(!state.notesHidden){
+    const outsN = computeOuts(pos, state.spectatorNum, rot);
+    const o = outsN[Math.min(state.altIndex, outsN.length - 1)];
+    const arrow = o.cut === 0 ? '' : (o.dir === '위→아래' ? '↓' : '↑');
+    const cut = o.cut === 0
+      ? (o.bridge ? `${o.bridgeName} 컷만` : '이동 없이')
+      : `${o.bridge ? o.bridgeName + ' + ' : ''}${o.cut}장 ${arrow}`;
+    const how = (o.label.includes('위에서') ? '위' : '아래')
+      + (o.tech !== '정확히 그 카드' ? ' · ' + o.tech : '');
+    faint = `<div class="notes-line notes-faint">${cut} · ${how}${o.practical ? '' : ' ⚠'}</div>`;
+  }
+
+  stage.innerHTML = `<div class="notes-plain">${linesOf(shown)}${faint}</div>`;
+
+  // 빈 곳을 탭하면 흐릿한 줄(과 바텀카드 줄)을 숨겼다 다시 보였다 한다
+  stage.onclick = ()=>{
+    state.notesHidden = !state.notesHidden;
+    renderAll();
+  };
+}
+
+
+
+// ================= 더블 버글라스 =================
+// 두 카드를 '같은 덱 상태 + 같은 숫자'로 동시에 만족시키는 해를 직접 찾는다.
+// (첫 카드용 컷을 하면 두 번째 카드 위치도 함께 움직이므로 따로 계산하면 어긋난다)
+function duoSolve(posA, posB, rot, N){
+  const out = [];
+  for(let R = 0; R < 52; R++){
+    const a = shiftPosition(posA, R), b = shiftPosition(posB, R);
+    const dCur = mod52(R - rot), dBr = mod52(R - 26);
+    const cutCur = Math.min(dCur, 52 - dCur), cutBr = Math.min(dBr, 52 - dBr);
+    const bridge = cutBr < cutCur;
+    const cut = bridge ? cutBr : cutCur;
+    const d = bridge ? dBr : dCur;
+    const dir = d === 0 ? null : (d <= 52 - d ? '위→아래' : '아래→위');
+    const push = (c)=>{ if(!N || c.N === N) out.push({ R, cut, dir, bridge, ...c }); };
+    for(let oa=0; oa<=2; oa++) for(let ob=0; ob<=1; ob++){
+      const n1 = a - oa, n2 = 53 - b - ob;
+      if(n1 === n2 && n1 >= 1 && n1 <= 52) push({ N:n1, aF:'top', oa, bF:'bot', ob });
+    }
+    for(let oa=0; oa<=1; oa++) for(let ob=0; ob<=2; ob++){
+      const n1 = 53 - a - oa, n2 = b - ob;
+      if(n1 === n2 && n1 >= 1 && n1 <= 52) push({ N:n1, aF:'bot', oa, bF:'top', ob });
+    }
+    for(let oa=0; oa<=2; oa++) for(let ob=0; ob<=2; ob++){
+      if(oa === ob) continue;
+      const n1 = a - oa, n2 = b - ob;
+      if(n1 === n2 && n1 >= 1 && n1 <= 52) push({ N:n1, aF:'top', oa, bF:'top', ob });
+    }
+  }
+  out.sort((x,y)=> x.cut - y.cut || (x.oa + x.ob) - (y.oa + y.ob));
+  return out;
+}
+const OFF_TXT = { 0:'', 1:' · 다음 카드', 2:' · 더블리프트' };
+function duoCutText(s){
+  if(s.cut === 0) return s.bridge ? '센터 컷만' : '컷 없이';
+  const arrow = s.dir === '위→아래' ? '↓' : '↑';
+  return `${s.bridge ? '센터 + ' : ''}${s.cut}장 ${arrow}`;
+}
+
+
+
+function renderNumberStage(){
+  // 숫자 먼저 모드: 아직 카드를 안 골랐으면 숫자만 받는 간단한 화면
+  if(!(state.rank && state.suit)){
+    if(isNotesSkin()){ stage.innerHTML = `<div class="notes-plain"></div>`; return; }
+    stage.innerHTML = `
+      <div class="placeholder">
+        <div class="big-q">🂠</div>
+        <div>관객이 부른 숫자를 입력하세요</div>
+        <div class="deck-name">${DECKS[state.deckKey].label} 사용 중</div>
+      </div>`;
+    return;
+  }
+  const pos = getPosition(state.deckKey, state.rank, state.suit);
+  const suitInfo = SUITS.find(s=>s.code===state.suit);
+  const rot = getRotation();
+  const curPos = shiftPosition(pos, rot);
+  const cls = classifyPos(curPos);
+
+  if(isNotesSkin()){
+    renderNotesNumberStage(pos, suitInfo, rot, curPos);
+    return;
+  }
+  const bottomInfo = state.bottomRank
+    ? `바텀카드 ${state.bottomRank}${SUITS.find(s=>s.code===state.bottomSuit).symbol} 기준 (${rot}장 컷된 상태)`
+    : '바텀카드 미입력 (새 스택 그대로 가정)';
+
+  // 관객 숫자가 아직 확정되지 않은 경우: 카드 정보를 자세히 보여줌
+  if(!state.spectatorNum){
+    stage.innerHTML = `
+      <div class="panel" style="padding:12px 14px;">
+        <div class="result-top" style="margin-bottom:2px;">
+          <div class="picked-card ${suitInfo.color}">${state.rank}${suitInfo.symbol}</div>
+          <div class="number-row" style="margin:0;">
+            <div class="big" style="font-size:28px;">${curPos}</div>
+            <div class="tag ${cls.key}">${cls.label}</div>
+          </div>
+        </div>
+        <div class="hint" style="font-size:11.5px;">${bottomInfo} · <span style="text-decoration:underline; cursor:pointer;" onclick="goToBottomStep()">변경</span></div>
+        <div class="spectator-line">
+          <span class="label">관객이 부른 숫자</span>
+          <span class="value ${state.numBuffer? '' : 'empty'}">${state.numBuffer || '입력 대기'}</span>
+        </div>
+      </div>
+      ${duoGuideHtml(pos, rot)}
+      ${(state.rank2 && state.suit2) ? '' : movesHtml(pos, rot)}
+    `;
+    return;
+  }
+
+  // 관객 숫자가 확정된 경우: 추천 아웃 하나를 크게, 나머지는 접어둠 (연출 중 빠르게 읽기 위해)
+  const outs = computeOuts(pos, state.spectatorNum, rot);
+
+  function cutLine(o){
+    if(o.cut === 0) return o.bridge ? (o.bridgeName + ' 컷만') : '컷 없이';
+    const arrow = o.dir === '위→아래' ? '↓' : '↑';
+    return (o.bridge ? o.bridgeName + ' + ' : '') + `${o.cut}장 ${arrow}`;
+  }
+  // 실행 단축: 위에서 세는 숫자가 크면, 덱을 뒤집어 아래에서 (53-N)장만 세도 같은 카드.
+  // 커버리지가 늘어나는 건 아니고 '세는 수고'를 줄여주는 연출용 대안이다.
+  function shortcutLine(o){
+    if(!o.label.includes('위에서')) return '';
+    const neff = state.spectatorNum + o.offset;
+    if(neff <= 26) return '';
+    return `뒤집어서 아래에서 ${53 - neff}장 (53−${neff})`;
+  }
+
+  function methodLine(o){
+    const parts = [o.label.includes('위에서') ? '위에서 카운트' : '아래에서 카운트'];
+    if(o.tech !== '정확히 그 카드') parts.push(o.tech);
+    return parts.join(' · ');
+  }
+
+  const heroIdx = Math.min(state.altIndex, outs.length - 1);
+  const hero = outs[heroIdx];
+  const altsHtml = outs.map((o,i)=> i===heroIdx ? '' : `
+    <div class="alt-item${o.practical ? '' : ' heavy'}" data-i="${i}">
+      <span class="alt-cut">${cutLine(o)}</span>
+      <span class="alt-method">${methodLine(o)}${shortcutLine(o) ? ' · ' + shortcutLine(o) : ''}</span>
+    </div>`).join('');
+
+  const heroWarn = hero.practical ? ''
+    : `<div class="hero-warn">${hero.cut}장 이동 — 티 날 수 있음</div>`;
+  // 더블 버글라스: 한 번의 컷으로 두 장을 동시에 맞추는 해를 먼저 찾고,
+  // 없으면 첫 장 공개 후 다시 컷하는 순차 방식으로 넘어간다.
+  let duoBlock = '', secondHtml = '';
+  if(state.rank2 && state.suit2){
+    const si2 = SUITS.find(x=>x.code===state.suit2);
+    const pos2 = getPosition(state.deckKey, state.rank2, state.suit2);
+    if(pos2){
+      const sols = duoSolve(pos, pos2, rot, state.spectatorNum);
+      if(sols.length){
+        const d = sols[0];
+        const aTxt = (d.aF === 'top' ? '위에서' : '아래에서') + ' 카운트' + OFF_TXT[d.oa];
+        const bTxt = (d.bF === 'top' ? '위에서' : '아래에서') + ' 카운트' + OFF_TXT[d.ob];
+        duoBlock = `
+          <div class="hero">
+            <div class="hero-cut">${duoCutText(d)}</div>
+            <div class="hero-method">한 번 컷으로 두 장 동시</div>
+            ${d.cut <= 5 ? '' : `<div class="hero-warn">${d.cut}장 이동 — 티 날 수 있음</div>`}
+          </div>
+          <div class="second">
+            <div class="second-row">
+              <span class="second-card ${suitInfo.color}">${state.rank}${suitInfo.symbol}</span>
+              <span class="second-method">${aTxt}</span>
+            </div>
+            <div class="second-row" style="margin-top:6px;">
+              <span class="second-card ${si2.color}">${state.rank2}${si2.symbol}</span>
+              <span class="second-method">${bTxt}</span>
+            </div>
+          </div>`;
+      } else {
+        // 동시 해가 없으면: 첫 장을 먼저 공개하고, 그 상태에서 다시 컷
+        const rotAfter = rotationAfter(hero, rot);
+        const o2 = computeOuts(pos2, state.spectatorNum, rotAfter)[0];
+        const arrow2 = o2.cut===0 ? '' : (o2.dir==='위→아래'?'↓':'↑');
+        const cut2 = o2.cut===0 ? (o2.bridge?'센터 컷만':'이동 없음')
+                                : `${o2.bridge?'센터 + ':''}${o2.cut}장 ${arrow2}`;
+        const m2 = (o2.label.includes('위에서')?'위에서':'아래에서')+' 카운트'
+                 + (o2.tech!=='정확히 그 카드' ? ' · '+o2.tech : '');
+        secondHtml = `<div class="second">
+          <div class="second-tag">② 첫 장 공개 후 이어서 · 같은 숫자 ${state.spectatorNum}</div>
+          <div class="second-row">
+            <span class="second-card ${si2.color}">${state.rank2}${si2.symbol}</span>
+            <span class="second-cut">${cut2}${o2.practical?'':' ⚠'}</span>
+          </div>
+          <div class="second-method">${m2}</div>
+        </div>`;
+      }
+    }
+  }
+
+  const heroShortcut = shortcutLine(hero)
+    ? `<div class="hero-shortcut">${shortcutLine(hero)}</div>` : '';
+
+  stage.classList.add('is-result');
+  stage.innerHTML = `
+    <div class="res-head">
+      <span class="res-meta">스택 ${curPos} · 관객 <b>${state.spectatorNum}</b></span>
+    </div>
+
+    ${duoBlock || `
+    <div class="hero">
+      <div class="hero-index ${suitInfo.color}">${state.rank}${suitInfo.symbol}</div>
+      <div class="hero-cut">${cutLine(hero)}</div>
+      <div class="hero-method">${methodLine(hero)}</div>
+      ${heroShortcut}
+      ${heroWarn}
+    </div>` + secondHtml}
+
+    <details class="alts"${state.altIndex ? ' open' : ''}>
+      <summary>다른 방법 ${outs.length - 1}개 · 탭하면 위로 올라갑니다</summary>
+      ${altsHtml}
+      <div class="alt-note">${bottomInfo}</div>
+      <div class="alt-note">연출 후 센 카드 더미를 뒤집어 덱 위에 얹으면 스택이 복구됩니다.</div>
+    </details>
+  `;
+
+  stage.querySelectorAll('.alt-item').forEach(el=>{
+    el.onclick = ()=>{ state.altIndex = parseInt(el.dataset.i, 10); renderAll(); };
+  });
+}
+
+
+
+
+// ================= 실수 방지: 초기화 되돌리기 =================
+// 연출 중 '새 카드'를 잘못 누르면 입력이 통째로 날아간다. 확인 창은 탭이 늘어나니
+// 대신 직전 상태를 잠깐 보관해 두고 한 번에 복구할 수 있게 한다.
+let lastSnapshot = null, snapshotTimer = null;
+const SNAP_KEYS = ['rank','suit','rank2','suit2','bottomRank','bottomSuit',
+                   'numBuffer','spectatorNum','noteLines','altIndex','mode','notesHidden'];
+function takeSnapshot(){
+  if(!state.rank && !state.spectatorNum) return;   // 빈 상태면 보관할 것 없음
+  const snap = {};
+  SNAP_KEYS.forEach(k=> snap[k] = Array.isArray(state[k]) ? state[k].slice() : state[k]);
+  lastSnapshot = snap;
+  clearTimeout(snapshotTimer);
+  snapshotTimer = setTimeout(()=>{ lastSnapshot = null; renderAll(); }, 15000);
+}
+function restoreSnapshot(){
+  if(!lastSnapshot) return;
+  SNAP_KEYS.forEach(k=> state[k] = lastSnapshot[k]);
+  lastSnapshot = null;
+  clearTimeout(snapshotTimer);
+  renderAll();
+}
+
+// ================= 다음 수 제안 (재즈 방식) =================
+// 미리 정해두지 않고, 지금 아는 정보만으로 "이번엔 어느 길이 제일 좋은지" 순위를 매긴다.
+function nextMoves(pos, rot){
+  const moves = [];
+
+  // 1) 숫자를 물을 필요조차 없는 자리 — 가장 강력
+  const ir = instantReveal(pos, rot);
+  if(ir){
+    moves.push({ tag:'즉시', title:'숫자 묻지 말고 바로 공개',
+                 body: ir, strong:true });
+  }
+
+  // 2) 컷 없이 되는 숫자 = 유도 1순위
+  const gs = guideNumbers(pos, rot);
+  const easy = gs.filter(g => g.n <= 15);
+  const mid  = gs.filter(g => g.n > 15 && g.n <= 30);
+  const pick = (easy.length ? easy : (mid.length ? mid : gs)).slice(0,2);
+  pick.forEach(g=>{
+    moves.push({ tag:'유도', title:`${g.n}번으로 유도 — ${g.how}`,
+                 body: patterFor(g.n).line + ` (${patterFor(g.n).note})` });
+  });
+
+  // 3) 자연스러운 숫자가 안 나오면 관객 컷으로 판을 새로 짠다
+  const smallest = gs.length ? gs[0].n : 99;
+  if(!ir && smallest > 15){
+    moves.push({ tag:'컷', title:'관객에게 컷시키고 바텀 확인',
+                 body:'컷하면 위치가 통째로 바뀝니다. 바텀카드를 글림스해 입력하면 새 숫자들이 나옵니다.' });
+  }
+
+  // 4) 두 번째 카드를 받으면 더 좋아지는 경우
+  if(!(state.rank2 && state.suit2)){
+    // 정말 편한 숫자가 하나도 없을 때만 더블을 권한다
+    const comfy = gs.some(g => g.n >= 1 && g.n <= 20);
+    if(!comfy){
+      moves.push({ tag:'더블', title:'두 번째 카드를 받는 편이 유리',
+                   body:'혼자서는 편한 숫자가 없습니다. 두 장이면 한 컷으로 동시에 맞출 숫자가 넓어집니다.' });
+    }
+  }
+  return moves;
+}
+
+function movesHtml(pos, rot){
+  const ms = nextMoves(pos, rot).slice(0,3);
+  if(!ms.length) return '';
+  const rows = ms.map((m,i)=>`
+    <div class="mv-item${i===0?' best':''}${m.strong?' strong':''}">
+      <div class="mv-top"><span class="mv-tag">${m.tag}</span><span class="mv-title">${m.title}</span></div>
+      <div class="mv-body">${m.body}</div>
+    </div>`).join('');
+  return `<div class="panel"><h2>다음 수</h2>${rows}</div>`;
+}
+
+// 두 카드가 다 정해졌으면, 한 번 컷으로 동시에 되는 '유도할 숫자'를 알려준다.
+// 실제 연출 순서(카드 두 장 먼저 → 숫자 유도)와 맞물리는 핵심 화면.
+function duoGuideHtml(pos, rot){
+  if(!(state.rank2 && state.suit2)) return '';
+  const pos2 = getPosition(state.deckKey, state.rank2, state.suit2);
+  if(!pos2) return '';
+  const si2 = SUITS.find(x=>x.code===state.suit2);
+  const sols = duoSolve(pos, pos2, rot, null).filter(x=>x.cut <= 5);
+  if(!sols.length) return '';
+  const seen = new Set();
+  const rows = sols.filter(x=>{ if(seen.has(x.N)) return false; seen.add(x.N); return true; })
+    .slice(0,2).map((d,i)=>{
+      const aTxt = (d.aF==='top'?'위':'아래') + OFF_TXT[d.oa];
+      const bTxt = (d.bF==='top'?'위':'아래') + OFF_TXT[d.ob];
+      return `<div class="guide-item${i===0?' best':''}">
+        <div class="guide-top"><span class="guide-n">${d.N}</span><span class="guide-how">${duoCutText(d)}</span></div>
+        <div class="guide-line">${state.rank}${SUITS.find(x=>x.code===state.suit).symbol} ${aTxt} · ${state.rank2}${si2.symbol} ${bTxt}</div>
+        <div class="guide-note">${patterFor(d.N).line}</div>
+      </div>`;
+    }).join('');
+  return `<div class="panel"><h2>두 장 동시 — 유도할 숫자</h2>${rows}</div>`;
+}
+
+// 두 번째 카드 입력 (같은 관객 숫자를 그대로 재사용)
+function renderCard2Dock(){
+  dock.innerHTML = `
+    <div class="dock-label"><span>두 번째 카드</span><button id="cancel2Btn">취소</button></div>
+    <div class="rank-grid" id="rank2Grid"></div>
+    <div class="suit-grid" id="suit2Grid"></div>
+  `;
+  document.getElementById('cancel2Btn').onclick = ()=>{ state.mode='number'; renderAll(); };
+  const rg=document.getElementById('rank2Grid');
+  RANKS.forEach(r=>{
+    const b=document.createElement('button');
+    b.className='rank-btn'+(state.rank2===r?' active':''); b.textContent=r;
+    b.onclick=()=>{ state.rank2=r; if(state.suit2) state.mode='number'; renderAll(); };
+    rg.appendChild(b);
+  });
+  const sg=document.getElementById('suit2Grid');
+  SUITS.forEach(su=>{
+    const b=document.createElement('button');
+    b.className='suit-btn '+su.color+(state.suit2===su.code?' active':'');
+    b.innerHTML=(state.rank2 ? '' : '<span class="suit-a">A</span>')+su.symbol;
+    b.onclick=()=>{ if(!state.rank2) state.rank2='A'; state.suit2=su.code; state.mode='number'; renderAll(); };
+    sg.appendChild(b);
+  });
+}
+
+function renderNumberDock(){
+  if(isNotesSkin()){ renderNotesInputDock('number'); return; }
+  if(isCalcSkin()){ renderCalcKeypadDock('number'); return; }
+
+  // 두 번째 카드는 숫자 받기 '전'에도 지정할 수 있어야 유도할 숫자를 역산해준다
+  const canSecond = state.rank && state.suit;
+  // 숫자 먼저 모드: 숫자를 다 친 다음 직접 넘어간다 (자동 전환은 두 자리 입력을 막는다)
+  const needCard = !(state.rank && state.suit);
+  dock.innerHTML = `
+    <div class="dock-label">
+      <span>관객 숫자 입력</span>
+      <span>
+        ${canSecond ? `<button id="secondCardBtn" style="margin-right:10px;">${(state.rank2&&state.suit2)?'2번 해제':'두 번째 카드'}</button>` : ''}
+        ${needCard ? '' : '<button id="backToBottomBtn" style="margin-right:10px;">바텀카드</button>'}
+        ${needCard
+          ? `<button id="toCardBtn" class="dock-next"${state.spectatorNum?'':' disabled'}>카드 입력 →</button>`
+          : '<button id="backToCardBtn">카드 변경</button>'}
+      </span>
+    </div>
+    <div class="keypad-display ${state.numBuffer ? '' : 'placeholder-txt'}">${state.numBuffer || '숫자를 입력하세요 (1-52)'}</div>
+    <div class="keypad-grid" id="keypadGrid"></div>
+  `;
+  const backCard = document.getElementById('backToCardBtn');
+  if(backCard) backCard.onclick = resetTrick;
+  const backBottom = document.getElementById('backToBottomBtn');
+  if(backBottom) backBottom.onclick = goToBottomStep;
+  const toCard = document.getElementById('toCardBtn');
+  if(toCard) toCard.onclick = ()=>{ if(state.spectatorNum){ state.mode='card'; renderAll(); } };
+  const sc2 = document.getElementById('secondCardBtn');
+  if(sc2) sc2.onclick = ()=>{
+    if(state.rank2 && state.suit2){ state.rank2=null; state.suit2=null; renderAll(); }
+    else { state.mode='card2'; renderAll(); }
+  };
+
+  // 확인 버튼 없이, 숫자를 누르는 즉시 결과가 갱신된다 (연출 중 흘끗 한 번으로 끝내기 위해)
+  const keys = ['1','2','3','4','5','6','7','8','9','지우기','0','⌫'];
+  const grid = document.getElementById('keypadGrid');
+  keys.forEach(k=>{
+    const btn = document.createElement('button');
+    btn.className = 'key-btn' + (k==='지우기' ? ' wide':'');
+    btn.textContent = k;
+    btn.onclick = ()=>{
+      if(k === '지우기'){
+        state.numBuffer = '';            // 숫자만 전부 지움 (카드는 유지)
+      } else if(k === '⌫'){
+        state.numBuffer = state.numBuffer.slice(0,-1);   // 한 자리씩
+      } else {
+        if(state.numBuffer.length < 2){ state.numBuffer += k; }
+      }
+      liveNumber();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+// 입력 중인 숫자가 1~52면 즉시 결과로 반영 (별도 확인 탭 불필요)
+function liveNumber(){
+  const n = parseInt(state.numBuffer, 10);
+  if(n >= 1 && n <= 52){ state.spectatorNum = n; state.altIndex = 0; }
+  else { state.spectatorNum = null; }
+  renderAll();
+}
+
+// 통합 런처로 이동
+document.getElementById('gotoFaroBtn').onclick = ()=>{ location.href = './spectrum.html'; };
+document.getElementById('gotoHomeBtn').onclick = ()=>{ location.href = './index.html?home=1'; };
+
+// 홈 화면 실행(standalone)일 때만 안전영역 여백을 켠다.
+// 브라우저 탭에서는 주소창/툴바가 이미 그 공간을 차지하므로 더하면 화면이 떠 보인다.
+(function detectStandalone(){
+  const mq = (typeof window.matchMedia === 'function')
+    ? window.matchMedia('(display-mode: standalone)') : null;
+  const on = ()=> (mq && mq.matches) || window.navigator.standalone === true;
+  const sync = ()=> document.documentElement.classList.toggle('is-standalone', !!on());
+  sync();
+  if(mq && mq.addEventListener) mq.addEventListener('change', sync);
+})();
+
+loadPersisted();
+renderAll();
+</script>
+</body>
+</html>
