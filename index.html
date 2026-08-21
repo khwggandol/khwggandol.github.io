@@ -33,7 +33,8 @@
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; padding:0; }
   body{
-    min-height:100vh; min-height:100svh; min-height:100dvh;
+    /* vh/dvh 대신 실제 화면에 고정 (iOS 홈 화면 실행에서 하단이 뜨는 것 방지) */
+    position:fixed; inset:0; overflow-y:auto;
     padding: calc(var(--sa-top) + 28px) 20px calc(var(--sa-bottom) + 24px);
     background:
       radial-gradient(120% 80% at 50% 0%, var(--bg2) 0%, var(--bg) 62%),

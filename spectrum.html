@@ -237,14 +237,11 @@
 
     /* ---------- 화면 ---------- */
     .screen {
+      /* vh/dvh 대신 fixed inset:0 — iOS 홈 화면 실행에서 높이가 짧게 잡혀
+         하단에 빈 띠가 생기는 것을 막는다 */
       display: none;
-      width: 100vw;
-      height: 100vh;
-      height: 100svh;
-      height: 100dvh;
-      position: absolute;
-      top: 0;
-      left: 0;
+      position: fixed;
+      inset: 0;
       background: var(--bg-main);
       overflow: hidden;
     }
