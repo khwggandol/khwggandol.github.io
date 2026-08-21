@@ -121,10 +121,12 @@
     /* ---------- 설정 ---------- */
     .settings-toggle-btn {
       position: fixed;
-      top: calc(var(--sa-top) + 12px);
-      right: 16px;
-      width: 36px;
-      height: 36px;
+      /* 계산기 스킨에서는 오른쪽 위 아이콘과 정확히 겹쳐 놓는다.
+         투명 처리돼 있으므로 그 자리를 눌러 설정을 연다. */
+      top: var(--sa-top);
+      right: 14px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       background: rgba(120, 120, 128, 0.25);
       backdrop-filter: blur(20px);
@@ -372,22 +374,25 @@
     #skin-calc {
       flex-direction: column;
       justify-content: flex-end;
-      padding: 0 16px calc(var(--sa-bottom) + 20px) 16px;
+      /* 실측: 마지막 버튼 행 아래로 62pt (안전영역 34 + 28) */
+      padding: 0 16px calc(var(--sa-bottom) + 28px) 16px;
     }
 
     .calc-top-bar {
       position: absolute;
-      top: calc(var(--sa-top) + 50px);
-      left: 16px;
-      right: 16px;
+      top: var(--sa-top);
+      left: 14px;
+      right: 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
     .calc-icon-btn {
-      width: 36px;
-      height: 36px;
+      /* 실측: 실제 앱의 원은 지름 44 */
+      width: 44px;
+      height: 44px;
+      flex: 0 0 auto;
       border-radius: 50%;
       background: var(--calc-key-dark);
       display: flex;
@@ -424,7 +429,7 @@
     .calc-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      gap: 8px;               /* 실측 8.3 */
       width: 100%;
       max-width: 420px;
       margin: 0 auto;
@@ -464,19 +469,20 @@
     #skin-notes {
       flex-direction: column;
       background: var(--notes-bg);
-      padding-top: calc(var(--sa-top) + 50px);
+      padding-top: var(--sa-top);
     }
 
     .notes-header {
-      padding: 10px 16px;
+      padding: 0 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
     .notes-back-btn, .notes-check-circle {
-      width: 38px;
-      height: 38px;
+      /* 실측: 실제 앱의 원은 지름 44 */
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       display: flex;
       justify-content: center;
@@ -491,7 +497,7 @@
     .notes-top-right { display: flex; align-items: center; gap: 10px; }
 
     .notes-action-pill {
-      height: 38px;
+      height: 44px;
       background: var(--notes-icon-bg);
       border-radius: 20px;
       display: flex;
@@ -1142,10 +1148,6 @@
     function syncViewport(){
       var standalone = (dm && dm.matches) || window.navigator.standalone === true;
       document.documentElement.classList.toggle('is-standalone', !!standalone);
-      // 홈 화면 앱의 웹뷰가 화면보다 짧게 잡히면(구 설정 잔류) 하단 안전영역은 낭비된다
-      var lost = standalone ? (screen.height - window.innerHeight) : 0;
-      var clipped = lost > 20 && lost < 120;
-      document.documentElement.style.setProperty('--sa-bottom', clipped ? '0px' : '');
     }
     syncViewport();
     window.addEventListener('resize', syncViewport);
