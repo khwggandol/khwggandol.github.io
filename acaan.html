@@ -7,6 +7,7 @@
 <!-- black-translucent 는 iOS 홈 화면 실행 시 웹뷰를 상태바 아래로 올려버려
      화면 맨 아래에 상태바 높이만큼 검은 띠를 남긴다. black 이면 그 문제가 없다. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0C1116">
 <meta name="apple-mobile-web-app-title" content="계산기">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -354,6 +355,13 @@
   .calc-toprow{
     display:flex; justify-content:space-between; align-items:center; padding:2px 4px 14px;
   }
+  /* 실제 iOS 계산기는 두 아이콘이 상태바 바로 아래(안전영역 경계)에 붙어 있다.
+     dock 안에 두면 화면 중간까지 내려오므로 화면 최상단에 고정한다. */
+  body[data-skin="ios-calc"] .calc-toprow,
+  body[data-skin="android-calc"] .calc-toprow{
+    position:fixed; top:var(--sa-top); left:0; right:0; z-index:5;
+    padding:0 14px; margin:0; max-width:480px; margin-left:auto; margin-right:auto;
+  }
   .calc-suit-hint{
     display:flex; gap:13px; font-size:12px;
     color: rgba(var(--muted-rgb),0.28);
@@ -362,9 +370,11 @@
   .calc-suit-hint b{ font-weight:400; margin-left:2px; color: rgba(var(--muted-rgb),0.5); }
   .calc-suit-hint b.red{ color:rgba(255,120,110,0.6); }
   .calc-icon-btn{
-    width:38px; height:38px; border-radius:50%; border:none;
+    /* 실측: 실제 앱의 원은 지름 44pt */
+    width:44px; height:44px; border-radius:50%; border:none;
     background: rgba(255,255,255,0.08); color: rgba(var(--muted-rgb),0.85);
     font-size:16px; display:flex; align-items:center; justify-content:center;
+    flex:0 0 auto;
   }
   .calc-grid{
     display:grid; grid-template-columns: repeat(4,1fr); gap:10px; margin-top:4px;
@@ -449,18 +459,8 @@
   /* ===== 라이트모드: 위장 스킨은 실제 앱처럼 밝게 =====
      html[data-theme="light"] 일 때 적용. 시스템 설정을 따를 땐 JS가 이 속성을 세팅한다. ===== */
   /* ===== 라이트 테마 (수동 선택 또는 시스템 설정 반영) ===== */
-  html[data-theme="light"] body[data-skin="ios-calc"]{
-      background:#FFFFFF !important;
-      --cream:#000000; --muted-rgb:0,0,0;
-      --calc-digit-bg:#D5D5D5; --calc-digit-text:#000000;
-      --calc-func-bg:#A5A5A5; --calc-func-text:#000000;
-    }
-  html[data-theme="light"] body[data-skin="ios-calc"] .keypad-display{ color:#000 !important; }
-  html[data-theme="light"] body[data-skin="ios-calc"] .calc-answer-sub{ color:rgba(0,0,0,0.45); }
-  html[data-theme="light"] body[data-skin="ios-calc"] .calc-icon-btn{ background:rgba(0,0,0,0.06); color:#000; }
-  html[data-theme="light"] body[data-skin="ios-calc"] .calc-suit-hint{ color:rgba(0,0,0,0.32); }
-  html[data-theme="light"] body[data-skin="ios-calc"] .calc-suit-hint b{ color:rgba(0,0,0,0.55); }
-  html[data-theme="light"] body[data-skin="ios-calc"] .calc-suit-hint b.red{ color:rgba(200,40,30,0.7); }
+  /* iOS 계산기 앱에는 라이트 모드가 없다. 흰 계산기가 뜨면 그 자체로 위장이 깨지므로
+     이 스킨만은 테마와 무관하게 항상 다크를 유지한다. */
   html[data-theme="light"] body[data-skin="android-calc"]{
       background:#FFFFFF !important;
       --cream:#202124; --muted-rgb:32,33,36;
@@ -495,6 +495,13 @@
   html[data-theme="light"] body[data-skin="ios-notes"] .notes-rest-pill{ background:#EFEFF0; color:#000; }
   html[data-theme="light"] body[data-skin="ios-notes"] .notes-compose{ background:#EFEFF0; color:#000; }
   /* 기본(매직) 스킨 라이트 테마 */
+  /* 다크용 파랑/보라 발광을 라이트에 그대로 쓰면 화면이 얼룩덜룩해진다.
+     라이트에서는 아주 옅은 회색 그라디언트만 남긴다. */
+  html[data-theme="light"] body[data-skin="felt"]{
+    background:
+      radial-gradient(900px 500px at 50% -8%, #FFFFFF 0%, transparent 70%),
+      linear-gradient(180deg, #F7F7FA 0%, #ECECF1 100%);
+  }
   html[data-theme="light"] body[data-skin="felt"]{
     --felt:#F4F4F7; --felt-dark:#E9E9EE;
     --cream:#111114; --muted-rgb:0,0,0;
@@ -1152,6 +1159,10 @@
         <div class="opt-seg" id="bottomStepSeg"></div>
       </div>
       <div class="opt-row">
+        <span class="opt-name">계산기 힌트 줄</span>
+        <div class="opt-seg" id="calcHintSeg"></div>
+      </div>
+      <div class="opt-row">
         <span class="opt-name">화면 테마</span>
         <div class="opt-seg" id="themeSeg"></div>
       </div>
@@ -1318,6 +1329,7 @@ function applySkin(key){
   // 홈 화면에 추가할 때 표시될 앱 이름도 스킨에 맞춤 (위장 유지)
   const metaTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
   if(metaTitle) metaTitle.setAttribute('content', SKINS[key].appTitle);
+  syncThemeColor();
   const h1 = document.querySelector('.brand h1');
   if(h1) h1.textContent = SKINS[key].appTitle;
   localStorage.setItem('acaan_skin', key);
@@ -1330,6 +1342,7 @@ function renderOptions(){
   const defs = [
     { el:'sortModeSeg', key:'sortMode', opts:[['cut','컷 최소'],['simple','기법 최소']] },
     { el:'inputOrderSeg', key:'inputOrder', opts:[['card','카드 먼저'],['number','숫자 먼저']] },
+    { el:'calcHintSeg', key:'showCalcHint', opts:[[true,'표시'],[false,'숨김']] },
     { el:'themeSeg', key:'theme', opts:[['system','시스템'],['light','라이트'],['dark','다크']] },
     { el:'bottomStepSeg', key:'useBottomStep', opts:[[false,'생략'],[true,'사용']] }
   ];
@@ -1395,6 +1408,8 @@ function loadPersisted(){
     if(['system','light','dark'].includes(savedTheme)) state.theme = savedTheme;
     const savedBottom = localStorage.getItem('acaan_useBottomStep');
     if(savedBottom === 'true' || savedBottom === 'false') state.useBottomStep = (savedBottom === 'true');
+    const savedHint = localStorage.getItem('acaan_showCalcHint');
+    if(savedHint === 'true' || savedHint === 'false') state.showCalcHint = (savedHint === 'true');
     applyTheme();
     state.mode = startMode();
     applySkin(savedSkin || 'felt');
@@ -1413,6 +1428,7 @@ let state = {
   spectatorNum: null,
   noteLines: [],      // 노트 스킨: 실제 타이핑한 것처럼 누적되는 줄들
   altIndex: 0,        // 계산기 스킨: 현재 보고 있는 아웃 번호 (시계 아이콘으로 순환)
+  showCalcHint: true, // 계산기 스킨 상단의 ÷♥ ×♣ −♦ +♠ 컨닝 줄 (외웠으면 숨겨서 위장을 강화)
   sortMode: 'cut',    // 'cut'=컷 최소 우선 / 'simple'=기법 단순 우선
   inputOrder: 'card', // 'card'=카드 먼저 / 'number'=숫자 먼저
   theme: 'system',    // 'system' | 'light' | 'dark'
@@ -1734,6 +1750,24 @@ const themeMQ = (typeof window.matchMedia === 'function')
 function applyTheme(){
   const t = state.theme === 'system' ? (themeMQ.matches ? 'light' : 'dark') : state.theme;
   document.documentElement.dataset.theme = t;
+  syncThemeColor();
+}
+
+// iOS는 상태바 영역을 theme-color 로 칠한다. 화면 맨 위 색과 어긋나면 띠처럼 이음새가 보인다.
+// 스킨마다 배경이 달라서 전환할 때마다 맞춰준다.
+const TOPBAR_COLOR = {
+  'felt':          { dark:'#0C1116', light:'#F7F7FA' },
+  'ios-calc':      { dark:'#000000', light:'#000000' },  // 계산기 스킨은 항상 다크
+  'ios-notes':     { dark:'#000000', light:'#FFFFFF' },
+  'android-calc':  { dark:'#000000', light:'#FFFFFF' }
+};
+function syncThemeColor(){
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(!meta) return;
+  const t = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  const skin = document.body.dataset.skin || 'felt';
+  const c = (TOPBAR_COLOR[skin] || TOPBAR_COLOR.felt)[t];
+  meta.setAttribute('content', c);
 }
 if(themeMQ.addEventListener) themeMQ.addEventListener('change', ()=>{ if(state.theme === 'system') applyTheme(); });
 else if(themeMQ.addListener) themeMQ.addListener(()=>{ if(state.theme === 'system') applyTheme(); });
@@ -2081,13 +2115,16 @@ function calcDisplayHtml(kind){
     const best = outs[idx];
     const dirShort = best.cut === 0 ? '' : (best.dir === '위→아래' ? '↓' : '↑');
     const big = best.cut === 0 ? '0' : `${dirShort}${best.cut}`;
+    // 계산기 화면에 한국어가 떠 있으면 그 자체로 위장이 깨진다.
+    // 연산 기호처럼 보이는 기호로만 표기한다.
+    //   ▽ 위에서 카운트 · △ 아래에서 카운트 · C 센터 컷 · +1 다음 카드 · +2 더블리프트 · ! 무리한 아웃
     const parts = [];
-    if(best.bridge) parts.push(best.bridgeName);
-    parts.push(best.label.includes('위에서') ? '위에서 카운트' : '아래에서 카운트');
-    if(best.offset === 1) parts.push('다음 카드');
-    if(best.offset === 2) parts.push('더블리프트');
+    if(best.bridge) parts.push('C');
+    parts.push(best.label.includes('위에서') ? '▽' : '△');
+    if(best.offset === 1) parts.push('+1');
+    if(best.offset === 2) parts.push('+2');
+    if(!best.practical) parts.push('!');
     const counter = outs.length > 1 ? ` <span style="opacity:0.45;">${idx+1}/${outs.length}</span>` : '';
-    if(!best.practical) parts.push('⚠');
     return `<div class="calc-answer-sub">${parts.join(' · ')}${counter}</div>
       <div class="keypad-display">${big}</div>`;
   }
@@ -2107,11 +2144,11 @@ function renderCalcKeypadDock(kind){
   dock.innerHTML = `
     <div class="dock-label"><span>${label}</span><span>${topRight}</span></div>
     <div class="calc-toprow">
-      <div class="calc-icon-btn" id="calcAltBtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg></div>
-      ${isCardLike ? `<div class="calc-suit-hint">
+      <div class="calc-icon-btn" id="calcAltBtn"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg></div>
+      ${isCardLike && state.showCalcHint ? `<div class="calc-suit-hint">
         <span>÷<b class="red">♥</b></span><span>×<b>♣</b></span><span>−<b class="red">♦</b></span><span>+<b>♠</b></span>
       </div>` : '<span></span>'}
-      <div class="calc-icon-btn" id="calcSettingsBtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><line x1="8" y1="7" x2="16" y2="7"/><circle cx="8" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="16" r="0.9" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="0.9" fill="currentColor" stroke="none"/></svg></div>
+      <div class="calc-icon-btn" id="calcSettingsBtn"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><line x1="8" y1="7" x2="16" y2="7"/><circle cx="8" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="0.9" fill="currentColor" stroke="none"/><circle cx="12" cy="16" r="0.9" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="0.9" fill="currentColor" stroke="none"/></svg></div>
     </div>
     ${calcDisplayHtml(kind)}
     ${isSamsungSkin() ? '<div class="sam-backspace-row"><button class="sam-backspace" id="samBackspace"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5H9L3 12l6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><line x1="12" y1="9.5" x2="17" y2="14.5"/><line x1="17" y1="9.5" x2="12" y2="14.5"/></svg></button></div>' : ''}
@@ -2981,7 +3018,7 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v6';
+const BUILD = 'v10';
 
 // 화면 실측: 하단 여백의 원인을 기기에서 바로 확인하기 위한 진단
 function renderViewportDiag(){
@@ -3009,7 +3046,10 @@ function renderViewportDiag(){
     'body h&nbsp;&nbsp;&nbsp;&nbsp;' + bodyH,
     'dock 하단 ' + dockBottom,
     'safe&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + saTop + ' / ' + saBot,
-    'standalone ' + (standalone ? 'yes' : 'no')
+    'standalone ' + (standalone ? 'yes' : 'no'),
+    '웹뷰 잘림&nbsp;&nbsp;' + (document.documentElement.classList.contains('is-clipped-viewport')
+        ? (screen.height - window.innerHeight) + 'pt — 홈 화면에서 앱을 지우고 다시 추가하세요'
+        : '없음')
   ].join('<br>');
 }
 
@@ -3023,9 +3063,25 @@ document.getElementById('gotoHomeBtn').onclick = ()=>{ location.href = './index.
   const mq = (typeof window.matchMedia === 'function')
     ? window.matchMedia('(display-mode: standalone)') : null;
   const on = ()=> (mq && mq.matches) || window.navigator.standalone === true;
-  const sync = ()=> document.documentElement.classList.toggle('is-standalone', !!on());
+
+  function sync(){
+    const standalone = !!on();
+    document.documentElement.classList.toggle('is-standalone', standalone);
+
+    // iOS 홈 화면 앱이 '추가할 당시'의 상태바 설정을 계속 붙들고 있으면
+    // 웹뷰가 화면보다 상태바 높이만큼 짧게 잡힌다(예: 852 화면에 793 뷰포트).
+    // 이때 화면 아래 남는 띠는 웹뷰 바깥이라 손댈 수 없고,
+    // 홈 인디케이터도 그 띠 안에 있으므로 하단 안전영역 여백은 낭비다. 되돌려준다.
+    const lost = standalone ? (screen.height - window.innerHeight) : 0;
+    const clipped = lost > 20 && lost < 120;
+    document.documentElement.style.setProperty('--sa-bottom', clipped ? '0px' : '');
+    document.documentElement.classList.toggle('is-clipped-viewport', clipped);
+  }
+
   sync();
   if(mq && mq.addEventListener) mq.addEventListener('change', sync);
+  window.addEventListener('resize', sync);
+  window.addEventListener('orientationchange', ()=> setTimeout(sync, 250));
 })();
 
 loadPersisted();
