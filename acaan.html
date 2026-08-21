@@ -36,7 +36,7 @@
     /* 메모 스킨 서식바가 앉는 높이 = 키보드 높이.
        키보드가 올라오면 실측값으로, 내려가면 마지막 높이를 그대로 유지한다
        (실제 메모 앱도 편집 중에는 늘 키보드 위에 붙어 있다). */
-    --kb-h: 336px;
+    --kb-top: 448px;   /* JS가 실측으로 덮어쓴다 */
     --muted-rgb: 255,255,255;   /* rgba(var(--muted-rgb),a) 로 쓰는 보조 텍스트 기준색 */
     --on-accent: #000000;       /* --gold-bright 배경 위에 올리는 글자색 */
     --glass: rgba(255,255,255,0.07);
@@ -420,7 +420,7 @@
   /* 서식바는 문서 흐름이 아니라 키보드 바로 위에 떠 있다 */
   body[data-skin="ios-notes"] .notes-format-row{
     position:fixed; left:0; right:0;
-    bottom: calc(var(--kb-h) + 8px);
+    top: var(--kb-top); bottom:auto;
     max-width:480px; margin-left:auto; margin-right:auto;
     z-index:6;
   }
@@ -2464,6 +2464,7 @@ const dock = document.getElementById('dock');
 function renderAll(){
   // 노트 결과 화면에서 달아둔 탭 핸들러가 다른 화면에 남지 않도록 매번 비운다
   stage.onclick = null;
+  if(typeof window.notesBarPlace === 'function') setTimeout(window.notesBarPlace, 0);
   const dcName = document.getElementById('dcName');
   if(dcName) dcName.textContent = DECKS[state.deckKey].label;
   renderSkinGrid();
@@ -3034,22 +3035,45 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v11';
+const BUILD = 'v12';
 
-// 키보드 높이 추적: visualViewport 가 줄어든 만큼이 키보드다.
-// 메모 스킨 서식바를 그 바로 위에 붙여 실제 메모 앱과 같은 자리에 두기 위함.
+// 메모 스킨 서식바를 키보드 바로 위에 붙인다.
+// 키보드 '높이'를 빼서 계산하면 기기·키보드 종류마다 어긋나므로,
+// visualViewport 가 알려주는 '보이는 영역의 아래쪽 끝'을 좌표로 그대로 쓴다.
+let kbDebug = '-';
 (function trackKeyboard(){
   const vv = window.visualViewport;
-  if(!vv) return;
-  let last = 336;
-  const sync = ()=>{
-    const gap = Math.round(window.innerHeight - vv.height - vv.offsetTop);
-    if(gap > 120){ last = gap; }   // 키보드가 올라온 상태의 실측값만 채택
-    document.documentElement.style.setProperty('--kb-h', last + 'px');
-  };
-  sync();
-  vv.addEventListener('resize', sync);
-  vv.addEventListener('scroll', sync);
+  const GAP = 8;
+  let lastTop = parseFloat(localStorage.getItem('acaan_kbTop'));
+  if(!(lastTop > 0)) lastTop = null;
+
+  function place(){
+    const bar = document.querySelector('.notes-format-row');
+    const barH = (bar && bar.offsetHeight) || 60;
+    const layoutH = window.innerHeight;
+    let top;
+    if(vv){
+      const visibleBottom = vv.offsetTop + vv.height;   // 레이아웃 좌표 기준
+      const hidden = layoutH - visibleBottom;           // 키보드가 가린 높이
+      kbDebug = `inner ${Math.round(layoutH)} / vv ${Math.round(vv.height)}`
+              + ` +${Math.round(vv.offsetTop)} → 가림 ${Math.round(hidden)}`;
+      if(hidden > 120){                                 // 키보드가 올라온 상태
+        lastTop = Math.round(visibleBottom - barH - GAP);
+        localStorage.setItem('acaan_kbTop', lastTop);
+      }
+    }
+    // 키보드가 내려가도 마지막 자리를 유지한다 (실제 메모 앱도 편집 중엔 늘 키보드 위)
+    top = (lastTop !== null) ? lastTop : Math.round(layoutH - barH - GAP - 336);
+    document.documentElement.style.setProperty('--kb-top', top + 'px');
+  }
+
+  window.notesBarPlace = place;
+  place();
+  if(vv){
+    vv.addEventListener('resize', place);
+    vv.addEventListener('scroll', place);
+  }
+  window.addEventListener('resize', place);
 })();
 
 // 화면 실측: 하단 여백의 원인을 기기에서 바로 확인하기 위한 진단
@@ -3079,7 +3103,8 @@ function renderViewportDiag(){
     'dock 하단 ' + dockBottom,
     'safe&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + saTop + ' / ' + saBot,
     'standalone ' + (standalone ? 'yes' : 'no'),
-    '키보드&nbsp;&nbsp;&nbsp;&nbsp;' + getComputedStyle(document.documentElement).getPropertyValue('--kb-h')
+    '키보드&nbsp;&nbsp;&nbsp;&nbsp;' + kbDebug,
+    '서식바 top ' + getComputedStyle(document.documentElement).getPropertyValue('--kb-top')
   ].join('<br>');
 }
 
