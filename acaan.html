@@ -4,7 +4,9 @@
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- black-translucent 는 iOS 홈 화면 실행 시 웹뷰를 상태바 아래로 올려버려
+     화면 맨 아래에 상태바 높이만큼 검은 띠를 남긴다. black 이면 그 문제가 없다. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="계산기">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -1053,6 +1055,12 @@
   .guide-item.best .guide-n{ color:var(--gold-bright); }
   .guide-how{ font-size:12.5px; color: rgba(var(--muted-rgb),0.45); }
   .guide-line{ font-size:13px; color: rgba(var(--muted-rgb),0.85); margin-top:2px; }
+  /* 컷 없이 되는 자리 표시 */
+  .guide-badge, .hg-badge{
+    margin-left:7px; padding:2px 7px; border-radius:6px;
+    font-size:10px; font-weight:700; letter-spacing:0.02em;
+    background:var(--zone-easy); color:#04210b; vertical-align:middle;
+  }
   .guide-note{ font-size:11px; color: rgba(var(--muted-rgb),0.35); margin-top:1px; }
   .dbl-item{ padding:8px 4px; border-bottom:1px solid var(--panel-line); }
   .dbl-item:last-child{ border-bottom:none; }
@@ -1163,7 +1171,7 @@
 
     <div class="custom-box">
       <div class="custom-label">화면 진단</div>
-      <div class="opt-hint" id="viewportDiag" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; line-height:1.7;"></div>
+      <div class="opt-hint" id="viewportDiag" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; line-height:1.7;">불러오는 중…</div>
     </div>
 
     <div class="custom-box">
@@ -1475,11 +1483,13 @@ function patterFor(n){
 function guideNumbers(pos, rot){
   const cur = shiftPosition(pos, rot);
   const afterBridge = shiftPosition(pos, 26);
+  // noTouch = 덱을 전혀 건드리지 않고 그대로 세면 맞는 숫자.
+  // 관객이 이 숫자를 부르면 컷도 센터 컷도 없이 진행되는 진짜 버글라스가 된다.
   return [
-    { how:'위에서 카운트',            n: cur },
-    { how:'아래에서 카운트',          n: 53 - cur },
-    { how:'센터 컷 후 위에서',    n: afterBridge },
-    { how:'센터 컷 후 아래에서',  n: 53 - afterBridge }
+    { how:'위에서 카운트',       n: cur,             noTouch:true },
+    { how:'아래에서 카운트',     n: 53 - cur,        noTouch:true },
+    { how:'센터 컷 후 위에서',   n: afterBridge,     noTouch:false },
+    { how:'센터 컷 후 아래에서', n: 53 - afterBridge, noTouch:false }
   ].filter(x=>x.n>=1 && x.n<=52).sort((a,b)=>a.n-b.n);
 }
 
@@ -1885,7 +1895,7 @@ function openCalcHistory(){
       guideNumbers(pos, rot).slice(0,3).forEach((g,i)=>{
         const pt = patterFor(g.n);
         html += `<div class="hist-guide${i===0?' sel':''}">
-          <div><b>${g.n}</b> <span class="hg-how">${g.how}</span></div>
+          <div><b>${g.n}</b> <span class="hg-how">${g.how}</span>${g.noTouch?' <span class="hg-badge">노터치</span>':''}</div>
           <div class="hg-line">${pt.line}</div>
           <div class="hg-note">${pt.note}</div>
         </div>`;
@@ -2818,8 +2828,15 @@ function nextMoves(pos, rot){
   const mid  = gs.filter(g => g.n > 15 && g.n <= 30);
   const pick = (easy.length ? easy : (mid.length ? mid : gs)).slice(0,2);
   pick.forEach(g=>{
-    moves.push({ tag:'유도', title:`${g.n}번으로 유도 — ${g.how}`,
-                 body: patterFor(g.n).line + ` (${patterFor(g.n).note})` });
+    if(g.noTouch){
+      moves.push({ tag:'버글라스', strong:true,
+                   title:`${g.n}번으로 유도 — ${g.how}`,
+                   body: `컷도 이동도 없이 그대로 셉니다 — 노터치 버글라스. `
+                       + patterFor(g.n).line + ` (${patterFor(g.n).note})` });
+    } else {
+      moves.push({ tag:'유도', title:`${g.n}번으로 유도 — ${g.how}`,
+                   body: patterFor(g.n).line + ` (${patterFor(g.n).note})` });
+    }
   });
 
   // 3) 자연스러운 숫자가 안 나오면 관객 컷으로 판을 새로 짠다
@@ -2866,8 +2883,9 @@ function duoGuideHtml(pos, rot){
     .slice(0,2).map((d,i)=>{
       const aTxt = (d.aF==='top'?'위':'아래') + OFF_TXT[d.oa];
       const bTxt = (d.bF==='top'?'위':'아래') + OFF_TXT[d.ob];
+      const noTouch = (d.cut === 0 && !d.bridge);
       return `<div class="guide-item${i===0?' best':''}">
-        <div class="guide-top"><span class="guide-n">${d.N}</span><span class="guide-how">${duoCutText(d)}</span></div>
+        <div class="guide-top"><span class="guide-n">${d.N}</span><span class="guide-how">${duoCutText(d)}</span>${noTouch?'<span class="guide-badge">버글라스</span>':''}</div>
         <div class="guide-line">${state.rank}${SUITS.find(x=>x.code===state.suit).symbol} ${aTxt} · ${state.rank2}${si2.symbol} ${bTxt}</div>
         <div class="guide-note">${patterFor(d.N).line}</div>
       </div>`;
@@ -2963,6 +2981,8 @@ function liveNumber(){
   renderAll();
 }
 
+const BUILD = 'v6';
+
 // 화면 실측: 하단 여백의 원인을 기기에서 바로 확인하기 위한 진단
 function renderViewportDiag(){
   const el = document.getElementById('viewportDiag');
@@ -2982,6 +3002,7 @@ function renderViewportDiag(){
   const standalone = document.documentElement.classList.contains('is-standalone');
 
   el.innerHTML = [
+    '빌드&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + BUILD,
     'screen&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + screen.width + ' × ' + screen.height,
     'inner&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + window.innerWidth + ' × ' + window.innerHeight,
     'visual&nbsp;&nbsp;&nbsp;&nbsp;' + (vv ? Math.round(vv.width) + ' × ' + Math.round(vv.height) : '없음'),

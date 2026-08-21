@@ -1,6 +1,6 @@
 // 오프라인 캐시. 네트워크 우선 + 실패 시 캐시 폴백이라,
 // 파일을 갈아끼워도 온라인이면 항상 최신이 뜬다.
-const CACHE = 'spectrum-v4';
+const CACHE = 'spectrum-v6';
 const ASSETS = [
   './',
   './index.html',
