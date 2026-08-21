@@ -1162,6 +1162,11 @@
     </div>
 
     <div class="custom-box">
+      <div class="custom-label">화면 진단</div>
+      <div class="opt-hint" id="viewportDiag" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; line-height:1.7;"></div>
+    </div>
+
+    <div class="custom-box">
       <div class="custom-label">도구</div>
       <button class="custom-apply-btn" id="gotoFaroBtn" style="width:100%; padding:12px; margin-bottom:8px;">Faro Spectrum 열기</button>
       <button class="custom-apply-btn" id="gotoHomeBtn" style="width:100%; padding:12px; margin-bottom:4px; background:rgba(var(--muted-rgb),0.10); color:var(--cream);">선택 화면으로</button>
@@ -1563,7 +1568,10 @@ function computeOuts(pos, n, s){
 
 // ================= 덱 모달 =================
 const deckModalOverlay = document.getElementById('deckModalOverlay');
-document.getElementById('gearBtn').onclick = ()=> deckModalOverlay.classList.add('show');
+document.getElementById('gearBtn').onclick = ()=>{
+  deckModalOverlay.classList.add('show');
+  renderViewportDiag();
+};
 document.getElementById('closeModalBtn').onclick = ()=> deckModalOverlay.classList.remove('show');
 deckModalOverlay.onclick = (e)=>{ if(e.target === deckModalOverlay) deckModalOverlay.classList.remove('show'); };
 
@@ -2953,6 +2961,35 @@ function liveNumber(){
   if(n >= 1 && n <= 52){ state.spectatorNum = n; state.altIndex = 0; }
   else { state.spectatorNum = null; }
   renderAll();
+}
+
+// 화면 실측: 하단 여백의 원인을 기기에서 바로 확인하기 위한 진단
+function renderViewportDiag(){
+  const el = document.getElementById('viewportDiag');
+  if(!el) return;
+  // env(safe-area-*) 실제 값은 임시 요소에 적용해 계산된 padding으로 읽는다
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;left:0;width:0;visibility:hidden;'
+    + 'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const saTop = cs.paddingTop, saBot = cs.paddingBottom;
+  probe.remove();
+
+  const vv = window.visualViewport;
+  const bodyH = Math.round(document.body.getBoundingClientRect().height);
+  const dockBottom = Math.round(document.getElementById('dock').getBoundingClientRect().bottom);
+  const standalone = document.documentElement.classList.contains('is-standalone');
+
+  el.innerHTML = [
+    'screen&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + screen.width + ' × ' + screen.height,
+    'inner&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + window.innerWidth + ' × ' + window.innerHeight,
+    'visual&nbsp;&nbsp;&nbsp;&nbsp;' + (vv ? Math.round(vv.width) + ' × ' + Math.round(vv.height) : '없음'),
+    'body h&nbsp;&nbsp;&nbsp;&nbsp;' + bodyH,
+    'dock 하단 ' + dockBottom,
+    'safe&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + saTop + ' / ' + saBot,
+    'standalone ' + (standalone ? 'yes' : 'no')
+  ].join('<br>');
 }
 
 // 통합 런처로 이동
