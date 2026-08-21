@@ -3025,7 +3025,13 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v15';
+const BUILD = 'v16';
+
+// iOS가 커서를 보이게 하려고 화면 전체를 밀어 올리면 상단 헤더까지 따라 올라간다.
+// body 는 fixed 라 스크롤될 이유가 없으므로 원위치로 되돌린다.
+window.addEventListener('scroll', ()=>{
+  if(window.scrollY !== 0) window.scrollTo(0, 0);
+}, { passive:true });
 
 // 화면 실측: 하단 여백의 원인을 기기에서 바로 확인하기 위한 진단
 function renderViewportDiag(){

@@ -470,6 +470,8 @@
       flex-direction: column;
       background: var(--notes-bg);
       padding-top: var(--sa-top);
+      height: var(--vv-h, 100%);   /* 키보드가 올라오면 JS가 실제 보이는 높이로 줄인다 */
+      overflow: hidden;
     }
 
     .notes-header {
@@ -510,7 +512,7 @@
     .notes-pill-icon.share svg { stroke: var(--notes-share-color); fill: none; }
     .notes-pill-icon.more svg { fill: var(--notes-icon-color); }
 
-    .notes-content-area { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; }
+    .notes-content-area { flex: 1 1 auto; min-height: 0; padding: 16px 20px; display: flex; flex-direction: column; }
 
     /* iOS 계산기 앱에는 라이트 모드가 없다. 흰 계산기는 그 자체로 위장이 깨지므로
        이 화면만은 테마와 무관하게 항상 다크로 고정한다. */
@@ -1138,6 +1140,28 @@
       else c = light ? '#F2F2F7' : '#000000';
       meta.setAttribute('content', c);
     }
+
+    // 메모 화면 높이를 '키보드에 가리지 않는 영역'으로 맞춘다.
+    // 이렇게 해두면 커서가 늘 보이므로 iOS가 화면을 스크롤하지 않고,
+    // 상단 헤더가 따라 올라가는 현상이 사라진다.
+    (function fitNotesToViewport() {
+      var vv = window.visualViewport;
+      function fit() {
+        var h = vv ? Math.round(vv.height) : window.innerHeight;
+        document.documentElement.style.setProperty('--vv-h', h + 'px');
+        // iOS가 이미 밀어 올렸다면 되돌린다
+        if (window.scrollY !== 0) window.scrollTo(0, 0);
+      }
+      fit();
+      if (vv) {
+        vv.addEventListener('resize', fit);
+        vv.addEventListener('scroll', fit);
+      }
+      window.addEventListener('resize', fit);
+      window.addEventListener('scroll', function () {
+        if (window.scrollY !== 0) window.scrollTo(0, 0);
+      }, { passive: true });
+    })();
 
     /* ---------- 통합 런처 ---------- */
     $('gotoAcaanBtn').addEventListener('click', function () { location.href = './acaan.html'; });
