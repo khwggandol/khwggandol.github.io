@@ -302,6 +302,13 @@
   body[data-skin="ios-calc"] .dock, body[data-skin="android-calc"] .dock{
     background:transparent; border-top:none;
   }
+  /* backdrop-filter 가 걸린 요소는 position:fixed 자식의 기준 상자가 된다.
+     독 안에 화면 고정 요소(계산기 상단 아이콘 / 메모 서식바)를 두므로 반드시 꺼야 한다. */
+  body[data-skin="ios-calc"] .dock,
+  body[data-skin="android-calc"] .dock,
+  body[data-skin="ios-notes"] .dock{
+    backdrop-filter:none; -webkit-backdrop-filter:none;
+  }
   body[data-skin="ios-calc"] .dock-label, body[data-skin="android-calc"] .dock-label{
     opacity:0.5; text-transform:none; letter-spacing:0;
   }
@@ -3035,7 +3042,7 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v12';
+const BUILD = 'v13';
 
 // 메모 스킨 서식바를 키보드 바로 위에 붙인다.
 // 키보드 '높이'를 빼서 계산하면 기기·키보드 종류마다 어긋나므로,
@@ -3043,7 +3050,7 @@ const BUILD = 'v12';
 let kbDebug = '-';
 (function trackKeyboard(){
   const vv = window.visualViewport;
-  const GAP = 8;
+  const GAP = 16;   // 실측: 실제 메모 앱 서식바와 키보드 사이 약 17pt
   let lastTop = parseFloat(localStorage.getItem('acaan_kbTop'));
   if(!(lastTop > 0)) lastTop = null;
 
@@ -3064,6 +3071,8 @@ let kbDebug = '-';
     }
     // 키보드가 내려가도 마지막 자리를 유지한다 (실제 메모 앱도 편집 중엔 늘 키보드 위)
     top = (lastTop !== null) ? lastTop : Math.round(layoutH - barH - GAP - 336);
+    // 계산이 어긋나도 화면 밖으로 사라지지 않게 묶어둔다
+    top = Math.max(120, Math.min(top, layoutH - barH - 4));
     document.documentElement.style.setProperty('--kb-top', top + 'px');
   }
 
