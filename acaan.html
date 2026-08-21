@@ -33,6 +33,10 @@
        홈 화면에서 실행(standalone)할 때만 실제 값을 넣는다. */
     --sa-top: 0px;
     --sa-bottom: 0px;
+    /* 메모 스킨 서식바가 앉는 높이 = 키보드 높이.
+       키보드가 올라오면 실측값으로, 내려가면 마지막 높이를 그대로 유지한다
+       (실제 메모 앱도 편집 중에는 늘 키보드 위에 붙어 있다). */
+    --kb-h: 336px;
     --muted-rgb: 255,255,255;   /* rgba(var(--muted-rgb),a) 로 쓰는 보조 텍스트 기준색 */
     --on-accent: #000000;       /* --gold-bright 배경 위에 올리는 글자색 */
     --glass: rgba(255,255,255,0.07);
@@ -413,6 +417,13 @@
   .nf-text{ font-weight:600; font-size:15px; letter-spacing:-0.01em; }
   .nf-cut{ overflow:hidden; width:9px; }
   body[data-skin="ios-notes"] .notes-format-item{ font-size:20px; }
+  /* 서식바는 문서 흐름이 아니라 키보드 바로 위에 떠 있다 */
+  body[data-skin="ios-notes"] .notes-format-row{
+    position:fixed; left:0; right:0;
+    bottom: calc(var(--kb-h) + 8px);
+    max-width:480px; margin-left:auto; margin-right:auto;
+    z-index:6;
+  }
   body[data-skin="ios-notes"] .dock{
     background:transparent; border-top:none;
     padding: 10px 16px 10px;
@@ -569,6 +580,11 @@
   }
   body[data-skin="ios-calc"] .dock, body[data-skin="android-calc"] .dock{
     flex:1 1 auto; display:flex; flex-direction:column; justify-content:flex-end;
+    /* 실측: 마지막 버튼 행 아래로 62pt. 안전영역 34 + 여기 28 */
+    padding:0 16px 28px;
+  }
+  body[data-skin="ios-calc"] .calc-grid, body[data-skin="android-calc"] .calc-grid{
+    gap:8px; margin-top:0;
   }
   body[data-skin="ios-calc"] .calc-icon-btn, body[data-skin="android-calc"] .calc-icon-btn{
     cursor:pointer;
@@ -3018,7 +3034,23 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v10';
+const BUILD = 'v11';
+
+// 키보드 높이 추적: visualViewport 가 줄어든 만큼이 키보드다.
+// 메모 스킨 서식바를 그 바로 위에 붙여 실제 메모 앱과 같은 자리에 두기 위함.
+(function trackKeyboard(){
+  const vv = window.visualViewport;
+  if(!vv) return;
+  let last = 336;
+  const sync = ()=>{
+    const gap = Math.round(window.innerHeight - vv.height - vv.offsetTop);
+    if(gap > 120){ last = gap; }   // 키보드가 올라온 상태의 실측값만 채택
+    document.documentElement.style.setProperty('--kb-h', last + 'px');
+  };
+  sync();
+  vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync);
+})();
 
 // 화면 실측: 하단 여백의 원인을 기기에서 바로 확인하기 위한 진단
 function renderViewportDiag(){
@@ -3047,9 +3079,7 @@ function renderViewportDiag(){
     'dock 하단 ' + dockBottom,
     'safe&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + saTop + ' / ' + saBot,
     'standalone ' + (standalone ? 'yes' : 'no'),
-    '웹뷰 잘림&nbsp;&nbsp;' + (document.documentElement.classList.contains('is-clipped-viewport')
-        ? (screen.height - window.innerHeight) + 'pt — 홈 화면에서 앱을 지우고 다시 추가하세요'
-        : '없음')
+    '키보드&nbsp;&nbsp;&nbsp;&nbsp;' + getComputedStyle(document.documentElement).getPropertyValue('--kb-h')
   ].join('<br>');
 }
 
@@ -3068,14 +3098,6 @@ document.getElementById('gotoHomeBtn').onclick = ()=>{ location.href = './index.
     const standalone = !!on();
     document.documentElement.classList.toggle('is-standalone', standalone);
 
-    // iOS 홈 화면 앱이 '추가할 당시'의 상태바 설정을 계속 붙들고 있으면
-    // 웹뷰가 화면보다 상태바 높이만큼 짧게 잡힌다(예: 852 화면에 793 뷰포트).
-    // 이때 화면 아래 남는 띠는 웹뷰 바깥이라 손댈 수 없고,
-    // 홈 인디케이터도 그 띠 안에 있으므로 하단 안전영역 여백은 낭비다. 되돌려준다.
-    const lost = standalone ? (screen.height - window.innerHeight) : 0;
-    const clipped = lost > 20 && lost < 120;
-    document.documentElement.style.setProperty('--sa-bottom', clipped ? '0px' : '');
-    document.documentElement.classList.toggle('is-clipped-viewport', clipped);
   }
 
   sync();
