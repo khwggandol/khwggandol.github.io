@@ -472,9 +472,23 @@
       padding-top: var(--sa-top);
       height: var(--vv-h, 100%);   /* 키보드가 올라오면 JS가 실제 보이는 높이로 줄인다 */
       overflow: hidden;
+      padding-top: calc(var(--sa-top) + 44px);   /* 고정된 헤더 자리 */
+      /* 메모 스킨은 스크롤이라는 개념 자체가 없어야 한다 */
+      touch-action: none;
+      overscroll-behavior: none;
     }
+    #skin-notes .notes-textarea { touch-action: auto; }
 
     .notes-header {
+      /* 상단 바는 절대 움직이지 않는다. iOS가 화면을 밀어 올려도
+         --vv-shift 만큼 되돌려 제자리에 붙여둔다. */
+      position: fixed;
+      top: var(--sa-top);
+      left: 0;
+      right: 0;
+      z-index: 30;
+      background: var(--notes-bg);
+      transform: translateY(var(--vv-shift, 0px));
       padding: 0 16px;
       display: flex;
       justify-content: space-between;
@@ -1149,6 +1163,7 @@
       function fit() {
         var h = vv ? Math.round(vv.height) : window.innerHeight;
         document.documentElement.style.setProperty('--vv-h', h + 'px');
+        document.documentElement.style.setProperty('--vv-shift', (vv ? Math.round(vv.offsetTop) : 0) + 'px');
         // iOS가 이미 밀어 올렸다면 되돌린다
         if (window.scrollY !== 0) window.scrollTo(0, 0);
       }
@@ -1161,6 +1176,15 @@
       window.addEventListener('scroll', function () {
         if (window.scrollY !== 0) window.scrollTo(0, 0);
       }, { passive: true });
+
+      // 손가락 스와이프로 인한 스크롤은 아예 발생시키지 않는다.
+      // 설정 시트와 입력창 안에서는 정상 동작해야 하므로 예외로 둔다.
+      document.addEventListener('touchmove', function (e) {
+        if (document.body.getAttribute('data-rendered-skin') !== 'notes') return;
+        var t = e.target;
+        if (t && t.closest && t.closest('.settings-modal, textarea, input')) return;
+        e.preventDefault();
+      }, { passive: false });
     })();
 
     /* ---------- 통합 런처 ---------- */
