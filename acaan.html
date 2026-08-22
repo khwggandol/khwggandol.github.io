@@ -768,11 +768,12 @@
     order:2; border:none; overflow:hidden; color:transparent;
     text-decoration:none;   /* 기본 스타일의 밑줄이 체크 아래 그어지던 문제 */
   }
+  /* 실측(실제 메모 앱): 체크 획의 가로·세로 폭이 각각 18.3pt 로 거의 정사각, 획 두께 2.3pt.
+     기존 체크는 33 x 25 로 너무 넓고 납작했다. */
   body[data-skin="ios-notes"] .new-card-btn::before{
     content:''; position:absolute; inset:0; width:auto; height:auto;
-    background-size:22px 22px;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12.5l5.5 5.5L20 6.5'/></svg>");
-    background-size:contain; background-repeat:no-repeat; background-position:center;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M4.3 12.8L9.8 19.7L19.7 4.3'/></svg>");
+    background-size:25px 25px; background-repeat:no-repeat; background-position:center;
   }
   body[data-skin="ios-notes"] .new-card-btn.is-hidden,
   .new-card-btn.is-hidden{ display:none !important; }
@@ -3043,7 +3044,7 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v21';
+const BUILD = 'v22';
 
 // 메모 스킨에서 화면이 밀리는 것을 아예 막는다.
 // (1) 손가락 스와이프로 인한 스크롤은 touchmove 단계에서 차단하고,
