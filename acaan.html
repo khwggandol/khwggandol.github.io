@@ -49,6 +49,7 @@
   /* iOS는 예전부터 navigator.standalone 으로만 알 수 있어 JS가 이 클래스를 붙인다 */
   html.is-standalone{ --sa-top: env(safe-area-inset-top); --sa-bottom: env(safe-area-inset-bottom); }
 
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
   html,body{ margin:0; padding:0; height:100%; overscroll-behavior:none; }
   body{
@@ -752,6 +753,7 @@
   body[data-skin="ios-notes"] .icon-btn{
     background:transparent; border:none; width:auto; height:auto;
     font-size:0; position:relative; padding:0;
+    color:transparent; overflow:hidden;   /* 숨긴 글자가 폭을 차지해 점 세 개를 밀지 않도록 */
   }
   body[data-skin="ios-notes"] .icon-btn svg{ display:none; }
   body[data-skin="ios-notes"] .icon-btn::before{
@@ -763,11 +765,12 @@
     width:43px; height:43px; border-radius:50%; background:#D9B23D;
     font-size:0; position:relative; padding:0;
     display:flex; align-items:center; justify-content:center;
-    order:2; border:none;
+    order:2; border:none; overflow:hidden; color:transparent;
     text-decoration:none;   /* 기본 스타일의 밑줄이 체크 아래 그어지던 문제 */
   }
   body[data-skin="ios-notes"] .new-card-btn::before{
-    content:''; width:22px; height:22px;
+    content:''; position:absolute; inset:0; width:auto; height:auto;
+    background-size:22px 22px;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12.5l5.5 5.5L20 6.5'/></svg>");
     background-size:contain; background-repeat:no-repeat; background-position:center;
   }
@@ -3040,7 +3043,7 @@ function liveNumber(){
   renderAll();
 }
 
-const BUILD = 'v18';
+const BUILD = 'v21';
 
 // 메모 스킨에서 화면이 밀리는 것을 아예 막는다.
 // (1) 손가락 스와이프로 인한 스크롤은 touchmove 단계에서 차단하고,
