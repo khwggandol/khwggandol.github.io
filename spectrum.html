@@ -96,10 +96,19 @@
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
     }
 
-    body, html {
+    html {
       width: 100%;
       height: 100%;
       overflow: hidden;
+    }
+    body {
+      /* 문서 자체가 스크롤될 수 없도록 화면에 못박는다.
+         overflow:hidden 만으로는 iOS가 키보드를 띄울 때 밀어 올리는 것을 못 막는다. */
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
       background-color: var(--bg-main);
       color: var(--text-main);
       transition: background-color 0.25s ease, color 0.25s ease;
@@ -469,7 +478,6 @@
     #skin-notes {
       flex-direction: column;
       background: var(--notes-bg);
-      padding-top: var(--sa-top);
       height: var(--vv-h, 100%);   /* 키보드가 올라오면 JS가 실제 보이는 높이로 줄인다 */
       overflow: hidden;
       padding-top: calc(var(--sa-top) + 44px);   /* 고정된 헤더 자리 */
