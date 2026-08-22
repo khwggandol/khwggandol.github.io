@@ -556,6 +556,8 @@
     body[data-rendered-skin="notes"] .settings-toggle-btn{
       opacity: 0; background: transparent; border-color: transparent;
     }
+    /* 메모 스킨에서는 '···' 가 설정을 열므로, 투명 버튼이 체크 원의 탭을 가로채지 않게 뺀다 */
+    body[data-rendered-skin="notes"] .settings-toggle-btn{ pointer-events: none; }
 
     .notes-textarea {
       width: 100%;
@@ -1106,16 +1108,23 @@
     }
 
     /* ---------- 설정 UI ---------- */
-    $('settingsToggleBtn').addEventListener('click', function (e) {
-      e.stopPropagation();
+    function toggleSettings(e) {
+      if (e) e.stopPropagation();
       $('settingsModal').classList.toggle('active');
       renderRehearsal();
-    });
+    }
+    $('settingsToggleBtn').addEventListener('click', toggleSettings);
+
+    // 메모 스킨에서는 헤더의 '···' 가 설정을 연다 (실제 메모 앱에도 있는 버튼이라 위장이 유지된다)
+    var notesMoreBtn = document.querySelector('.notes-pill-icon.more');
+    if (notesMoreBtn) notesMoreBtn.addEventListener('click', toggleSettings);
 
     document.addEventListener('click', function (e) {
       var modal = $('settingsModal');
       var btn = $('settingsToggleBtn');
-      if (modal.classList.contains('active') && !modal.contains(e.target) && !btn.contains(e.target)) {
+      var more = document.querySelector('.notes-pill-icon.more');
+      if (modal.classList.contains('active') && !modal.contains(e.target)
+          && !btn.contains(e.target) && !(more && more.contains(e.target))) {
         modal.classList.remove('active');
       }
     });
